@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - 사용자 정보
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  name            String?
+  recipes         Recipe[]
+  searchHistories SearchHistory[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+// Recipe model - 레시피 정보
+model Recipe {
+  id          String       @id @default(cuid())
+  title       String
+  youtubeUrl  String?
+  dishName    String?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients Ingredient[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// Ingredient model - 식재료
+model Ingredient {
+  id        String    @id @default(cuid())
+  name      String
+  amount    String
+  unit      String
+  recipeId  String
+  recipe    Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// SearchHistory model - 검색 이력
+model SearchHistory {
+  id        String   @id @default(cuid())
+  query     String
+  type      String // "youtube" or "dish"
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// Product model - 상품 정보 캐시
+model Product {
+  id           String     @id @default(cuid())
+  name         String
+  price        Int
+  platform     String // "baemin", "coupang", "kurly"
+  url          String
+  calories     Int?
+  imageUrl     String?
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
