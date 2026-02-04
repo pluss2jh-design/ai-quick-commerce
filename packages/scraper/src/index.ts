@@ -21,8 +21,8 @@ export interface ProductInfo {
 export function extractWeightFromName(name: string): { weight: number; unit: string } | null {
   // 1. 수량 및 곱셈 처리 (예: 100g x 3, 200g*5, 100g 10개, 100g(10개입))
   const multiplierPatterns = [
-    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|포|입)\s*[xX*×]\s*(\d+)/i, // 100g x 10
-    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|포|입)\s*\(?(\d+)(?:개|팩|봉|포|입|입|구성)/i, // 100g (10개입) 또는 100g 10개
+    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|포|입|구)\s*[xX*×]\s*(\d+)/i, // 100g x 10
+    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|포|입|구)\s*\(?(\d+)(?:개|팩|봉|포|입|입|구성|구)/i, // 100g (10개입) 또는 100g 10개
   ];
 
   for (const pattern of multiplierPatterns) {
@@ -44,7 +44,7 @@ export function extractWeightFromName(name: string): { weight: number; unit: str
 
   // 2. 단일 용량 처리
   const patterns = [
-    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|box|BOX|포|입)/i,
+    /(\d+(?:\.\d+)?)\s*(kg|g|ml|l|L|개|팩|봉|box|BOX|포|입|구)/i,
     /(\d+(?:\.\d+)?)\s*(킬로그램|그램|밀리리터|리터|개)/i,
   ];
 
@@ -125,9 +125,23 @@ export function findBestMatchByWeight(
 
   // 4. 결정된 후보군 내에서 필터(최저가/저칼로리) 적용하여 정렬
   if (filter === 'price') {
-    candidates.sort((a, b) => a.price - b.price);
+    candidates.sort((a, b) => {
+      // 1순위: 가격 (오름차순)
+      if (a.price !== b.price) return a.price - b.price;
+      // 2순위: 무게 차이 (오름차순) - 가격이 같다면 용량이 더 적절한 것 선택
+      return Math.abs(a.parsedWeight - unitNormalizedTarget) - Math.abs(b.parsedWeight - unitNormalizedTarget);
+    });
   } else if (filter === 'calorie') {
-    candidates.sort((a, b) => (a.calories || 9999) - (b.calories || 9999));
+    candidates.sort((a, b) => {
+      const aCal = a.calories || 9999;
+      const bCal = b.calories || 9999;
+      // 1순위: 칼로리 (오름차순)
+      if (aCal !== bCal) return aCal - bCal;
+      // 2순위: 가격 (오름차순) - 칼로리 정보가 없거나 같다면 더 싼 것 선택
+      if (a.price !== b.price) return a.price - b.price;
+      // 3순위: 무게 차이 (오름차순)
+      return Math.abs(a.parsedWeight - unitNormalizedTarget) - Math.abs(b.parsedWeight - unitNormalizedTarget);
+    });
   }
 
   return candidates[0];
@@ -178,13 +192,24 @@ export async function searchBaemin(ingredientName: string): Promise<ProductInfo[
       const count = await productElements.count();
       console.log(`[Baemin] Found ${count} raw product elements`);
 
-      for (let i = 0; i < Math.min(count, 20); i++) {
+      for (let i = 0; i < Math.min(count, 30); i++) {
         const element = productElements.nth(i);
 
+        // 텍스트 내용 전체를 가져와서 분석
+        const allText = await element.innerText().catch(() => '');
+        const lines = allText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
         // 이름 및 가격 추출 시도
-        const name = (await element.locator('[class*="Name"], .name, h3').first().textContent().catch(() => ''))?.trim();
-        const priceText = (await element.locator('[class*="Price"], .price, .amount').first().textContent().catch(() => '0')) || '0';
-        const price = parseInt(priceText.replace(/[^0-9]/g, '')) || 0;
+        const name = (lines.find(l => l.length > 3 && !l.includes('원') && !l.includes('배달')) || '').trim();
+        const priceLine = lines.find(l => l.includes('원') && /\d/.test(l));
+
+        let price = 0;
+        if (priceLine) {
+          const priceMatches = priceLine.match(/\d[0-9,.]*/g);
+          if (priceMatches && priceMatches.length > 0) {
+            price = parseInt(priceMatches[0].replace(/[^0-9]/g, '')) || 0;
+          }
+        }
 
         const link = (await element.locator('a').first().getAttribute('href').catch(() => '')) || '';
         const imgElement = element.locator('img').first();
@@ -272,7 +297,14 @@ export async function searchCoupang(ingredientName: string): Promise<ProductInfo
         // 쿠팡 특성상 이름이 상단에 있고 가격에 ',000원' 형식이 있음
         const name = lines.find(l => l.length > 5 && !l.includes('원') && !l.includes('무료배송')) || '';
         const priceLine = lines.find(l => l.includes('원') && /\d+/.test(l));
-        const price = priceLine ? parseInt(priceLine.replace(/[^0-9]/g, '')) : 0;
+
+        let price = 0;
+        if (priceLine) {
+          const priceMatches = priceLine.match(/\d[0-9,.]*/g);
+          if (priceMatches && priceMatches.length > 0) {
+            price = parseInt(priceMatches[0].replace(/[^0-9]/g, '')) || 0;
+          }
+        }
 
         const link = (await element.locator('a').first().getAttribute('href').catch(() => '')) || '';
         const imgElement = element.locator('img').first();
@@ -342,9 +374,17 @@ export async function searchKurly(ingredientName: string): Promise<ProductInfo[]
         const lines = allText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
 
         // 컬리 특성상 이름이 보통 상단이나 이미지 근처에 있음
-        const name = lines.find(l => l.length > 5 && !l.includes('%') && !l.includes('원')) || '';
-        const priceLine = lines.find(l => l.includes('원'));
-        const price = priceLine ? parseInt(priceLine.replace(/[^0-9]/g, '')) : 0;
+        const name = lines.find(l => l.length > 5 && !l.includes('%') && !l.includes('원') && !l.includes('배송')) || '';
+        const priceLine = lines.find(l => l.includes('원') && /\d/.test(l));
+
+        // 가격 추출 고도화: '8,100원 9,000원' 처럼 여러 가격이 있을 경우 첫 번째(할인가)를 취함
+        let price = 0;
+        if (priceLine) {
+          const priceMatches = priceLine.match(/\d[0-9,.]*/g);
+          if (priceMatches && priceMatches.length > 0) {
+            price = parseInt(priceMatches[0].replace(/[^0-9]/g, '')) || 0;
+          }
+        }
 
         const link = (await element.getAttribute('href').catch(() => '')) || '';
         const imgElement = element.locator('img').first();
