@@ -6,9 +6,9 @@
 ---
 
 ## 📅 최종 업데이트
-**날짜**: 2026-02-02  
+**날짜**: 2026-02-03  
 **작성자**: Atlas (OhMyOpenCode)  
-**현재 단계**: 프로젝트 초기화 완료
+**현재 단계**: Phase 1 - AI 재료 추출 API 및 UI 연동 완료
 
 ---
 
@@ -43,6 +43,29 @@
 - [x] README.md 작성 (프로젝트 개요, 기능, 설치 방법)
 - [x] CONTEXT.md 작성 (이 문서)
 - [x] Git 초기화 (create-next-app이 자동으로 수행)
+
+### Phase 1: AI 재료 추출 API 및 UI 연동 ✅ (완료)
+
+#### 완료된 작업
+- [x] Claude API 연동 로직 구현 (`packages/ai/src/index.ts`)
+  - `extractIngredientsFromText()` - 레시피 텍스트에서 재료 추출
+  - `extractIngredientsFromDishName()` - 요리명에서 재료 추출
+- [x] 재료 추출 API 엔드포인트 생성 (`app/api/ai/ingredients/route.ts`)
+  - POST `/api/ai/ingredients` - 음식명 또는 유튜브 링크에서 재료 추출
+  - inputType: 'food' | 'youtube' 지원
+- [x] 프론트엔드 UI 구현 및 API 연동
+  - `FoodInputCard` 컴포넌트 - 음식명/유튜브 링크 입력
+  - `IngredientListCard` 컴포넌트 - 추출된 재료 리스트 표시
+  - `page.tsx` - 메인 페이지에서 API 호출 및 결과 표시
+
+#### 구현된 기능
+- 사용자가 음식명(예: "김치찌개") 입력 시 Claude AI가 자동으로 재료 추출
+- 사용자가 유튜브 링크 입력 시 재료 추출 (향후 유튜브 자막 연동 예정)
+- 추출된 재료는 실시간으로 IngredientListCard에 표시
+- 로딩 상태 및 에러 핸들링 구현
+
+#### 변경 이력
+- 2026-02-03: Phase 1 완료 - AI 재료 추출 API 및 UI 연동
 
 #### 생성된 파일 및 폴더
 ```
@@ -175,46 +198,44 @@ ingredient-cart-service/
 
 ---
 
-## 🚧 다음 작업 목표 (Phase 1)
+## 🚧 다음 작업 목표 (Phase 2)
 
 ### 우선순위 1: 환경 설정 및 기본 인프라
 - [ ] `.env.example` 파일 생성 (필요한 환경 변수 템플릿)
-- [ ] Prisma 스키마 설계
+  - ANTHROPIC_API_KEY
+  - DATABASE_URL
+  - REDIS_URL
+- [ ] Prisma 스키마 설계 및 마이그레이션
   - User 모델 (사용자 정보)
   - Recipe 모델 (레시피 정보)
   - Ingredient 모델 (식재료)
   - SearchHistory 모델 (검색 이력)
   - Product 모델 (상품 정보 캐시)
-- [ ] Prisma 마이그레이션 실행
-- [ ] Redis 연결 설정 (캐싱용)
+- [ ] Redis 연결 설정 (AI 응답 캐싱용)
 
-### 우선순위 2: 핵심 기능 구현
+### 우선순위 2: 유튜브 연동 기능
 - [ ] YouTube 데이터 추출 모듈 (`packages/scraper/youtube.ts`)
   - YouTube Data API 연동
   - 자막/설명 추출
   - Shorts 지원
-- [ ] Claude API 통합 (`packages/ai/claude.ts`)
-  - 식재료 추출 프롬프트 작성
-  - JSON 구조화된 응답 파싱
-  - 에러 핸들링
-- [ ] 이커머스 스크래퍼 (`packages/scraper/ecommerce.ts`)
-  - 배민 스크래퍼
-  - 쿠팡 스크래퍼
-  - 마켓컬리 스크래퍼
-  - 가격 및 칼로리 정보 추출
+- [ ] 유튜브 링크 분석 API 개선
+  - 영상 제목, 설명, 자막 추출
+  - 추출된 텍스트에서 재료 분석
 
-### 우선순위 3: 프론트엔드 UI
-- [ ] 메인 페이지 (`app/page.tsx`)
-  - 유튜브 링크 입력 폼
-  - 음식 이름 입력 폼
-  - 로딩 상태 표시
+### 우선순위 3: 이커머스 스크래핑
+- [ ] 배민 스크래퍼 구현
+- [ ] 쿠팡 스크래퍼 구현
+- [ ] 마켓컬리 스크래퍼 구현
+- [ ] 가격 및 칼로리 정보 추출
+- [ ] 상품 비교 API (`app/api/products/compare/route.ts`)
+
+### 우선순위 4: 결과 페이지 및 장바구니 기능
 - [ ] 결과 페이지 (`app/results/page.tsx`)
-  - 추출된 식재료 리스트
-  - 플랫폼별 상품 비교
-  - 장바구니 추가 버튼
-- [ ] 관리자 대시보드 (`app/admin/page.tsx`)
-  - 사용자 통계
-  - 검색 이력 분석
+  - 추출된 식재료 리스트 표시
+  - 플랫폼별 상품 비교 표시
+  - 장바구니 추가 기능
+- [ ] 크롬 확장 프로그램 연동
+  - 장바구니 자동 추가 API
   - 인기 레시피
 
 ### 우선순위 4: 크롬 확장 프로그램
@@ -259,6 +280,61 @@ ingredient-cart-service/
 ---
 
 ## 🔄 변경 이력
+
+### 2026-02-03
+- **Phase 1: AI 재료 추출 API 및 UI 연동 완료**
+  - Claude API 연동 로직 구현 (`packages/ai/src/index.ts`)
+    - `extractIngredientsFromText()`: 레시피 텍스트에서 재료 추출
+    - `extractIngredientsFromDishName()`: 요리명에서 재료 추출
+  - 재료 추출 API 엔드포인트 생성 (`app/api/ai/ingredients/route.ts`)
+    - POST `/api/ai/ingredients`: 음식명 또는 유튜브 링크에서 재료 추출
+    - inputType: 'food' | 'youtube' 지원
+  - 프론트엔드 UI 구현 및 API 연동
+    - `FoodInputCard`, `IngredientListCard` 컴포넌트 생성
+    - `page.tsx` 메인 페이지에서 API 호출 및 결과 표시
+    - 로딩 상태 및 에러 핸들링 구현
+  - 임시 데이터 제거, 실제 Claude API 연동 완료
+
+### 2026-02-04
+- **AI 프롬프트 개선 - 1인 기준 재료양 추출**
+  - `packages/ai/src/index.ts` 수정
+    - `extractIngredientsFromText()`: 1인분 기준 재료양 계산 프롬프트 추가
+    - `extractIngredientsFromDishName()`: 1인분 기준 재료양 계산 프롬프트 추가
+  - 요구사항: 모든 재료는 1인분 기준으로 분량을 계산, amount는 숫자만, unit은 단위만 표시
+
+- **스마트 상품 매칭 로직 구현**
+  - `packages/scraper/src/index.ts` 수정
+    - `extractWeightFromName()`: 상품명에서 무게/용량 추출 함수 추가
+    - `findBestMatchByWeight()`: 재료양과 가장 근접한 상품 매칭 함수 추가
+  - `app/api/products/coupang-match/route.ts` 생성
+    - 쿠팡 상품 검색 및 재료양 매칭 API 엔드포인트
+    - 최저가/저칼로리 필터 적용 후 최적 상품 반환
+
+- **UI 개선 - 스마트 매칭 버튼 연동**
+  - `app/page.tsx` 수정
+    - `openCoupangWithSmartMatch()`: 스마트 매칭 기능 구현
+    - 최저가/저칼로리 버튼을 스마트 매칭 기능과 연동
+    - 재료 카드에 1인분 기준 분량 표시 추가
+
+- **사용자 요청사항 기록 (2026-02-04)**
+  - 재료 표시를 밑으로 길게 늘어지지 않고 한 화면에 모두 표시되도록 변경 요청
+  - 모든 요청사항은 CONTEXT.md에 기록 필요
+  - AI 응답은 항상 한국어로 작성
+  - 웹 디자인을 Yumix 스타일(https://yumix.framer.website)로 변경 - 밝은 테마, 파스텔톤 색상
+  - 재료 옆에 최저가/저칼로리 버튼 추가 - 클릭 시 쿠팡에서 해당 조건의 상품을 새 브라우저에서 열기
+  - AI가 1인 기준 재료양 추출하도록 프롬프트 개선
+  - 쿠팡에서 재료양과 가장 근접한 상품 매칭 및 자동 로그인 처리 (진행 중)
+  - **낱개 상품 우선 매칭**: 100g 요청 시 "100g 10개입" 대신 "100g 낱개" 상품 우선 연결
+
+- **멀티 플랫폼 스마트 매칭 및 로직 고도화 (2026-02-04)**
+  - **티어 기반 용량 매칭 도입**:
+    - 티어 1: 요청량의 0.8~1.5배 (최우선)
+    - 티어 2: 요청량의 0.5~3.0배 (차선)
+    - 이 로직을 통해 "300g 요청 시 3kg 대용량"이 매칭되는 문제 해결
+  - **멀티 플랫폼 지원**: 쿠팡뿐만 아니라 **마켓컬리, B마트** 스크래퍼 통합 완료
+  - **스마트 매칭 API (`/api/products/smart-match`)**: 모든 플랫폼을 검색하여 가장 적합한 단일 상품 상세 페이지로 바로 연결하는 API 구현
+  - **스크래핑 내구성 강화**: 텍스트 기반 추출 로직으로 변경하여 사이트 UI 변경에 유연하게 대응
+  - **봇 감지 우회**: 모바일 유저 에이전트 및 마스킹 적용으로 쿠팡/컬리 차단 완화
 
 ### 2026-02-02
 - **프로젝트 초기화**
