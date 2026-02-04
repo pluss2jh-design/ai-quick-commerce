@@ -10,9 +10,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'ingredient is required' }, { status: 400 });
         }
 
-        console.log(`[SmartMatch] Searching for: ${ingredient} ${amount}${unit}`);
+        const searchQuery = filter === 'calorie' ? `${ingredient} 저칼로리` : ingredient;
+        console.log(`[SmartMatch] Searching for: ${searchQuery} ${amount}${unit}`);
 
-        const products = await searchAllPlatforms(ingredient);
+        const products = await searchAllPlatforms(searchQuery);
 
         const matchedProduct = findBestMatchByWeight(
             products,

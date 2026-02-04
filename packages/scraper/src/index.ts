@@ -71,6 +71,39 @@ export function extractWeightFromName(name: string): { weight: number; unit: str
   return null;
 }
 
+export function extractCaloriesFromName(name: string): number | null {
+  // 예: "100kcal", "50칼로리", "0칼로리", "Low calorie"
+  const patterns = [
+    /(\d+(?:\.\d+)?)\s*(?:kcal|칼로리|키로칼로리)/i,
+    /(\d+(?:\.\d+)?)\s*k/i, // 가끔 100k 로 표시되는 경우
+  ];
+
+  for (const pattern of patterns) {
+    const match = name.match(pattern);
+    if (match) return parseFloat(match[1]);
+  }
+
+  // 저칼로리 키워드 발견 시 낮은 점수(우선순위) 부여를 위해 0kcal로 가상 설정
+  const lowerName = name.toLowerCase();
+  if (
+    lowerName.includes('저칼로리') ||
+    lowerName.includes('라이트') ||
+    lowerName.includes('제로') ||
+    lowerName.includes('곤약') ||
+    lowerName.includes('슬림') ||
+    lowerName.includes('무설탕') ||
+    lowerName.includes('다이어트') ||
+    lowerName.includes('low calorie') ||
+    lowerName.includes('light') ||
+    lowerName.includes('sugar free') ||
+    lowerName.includes('diet')
+  ) {
+    return 0;
+  }
+
+  return null;
+}
+
 export function findBestMatchByWeight(
   products: ProductInfo[],
   targetWeight: number,
@@ -83,10 +116,12 @@ export function findBestMatchByWeight(
 
   const productsWithWeight = products.map(p => {
     const weightInfo = extractWeightFromName(p.name);
+    const calories = p.calories ?? extractCaloriesFromName(p.name);
     return {
       ...p,
       parsedWeight: weightInfo?.weight || 0,
       parsedUnit: weightInfo?.unit || 'ea',
+      calories: calories !== null ? calories : undefined
     };
   });
 

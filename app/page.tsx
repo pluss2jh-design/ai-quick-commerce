@@ -285,7 +285,7 @@ export default function Home() {
                 {productLoading && (
                   <div className="flex flex-col items-center justify-center h-full gap-4">
                     <div className="w-10 h-10 border-4 border-[#FF9A8B]/30 border-t-[#FF9A8B] rounded-full animate-spin"></div>
-                    <div className="text-[#AEAEAE] font-bold">최저가 상품을 찾고 있어요</div>
+                    <div className="text-[#AEAEAE] font-bold">전체 마켓에서 최저가를 비교하고 있어요</div>
                   </div>
                 )}
 
@@ -326,9 +326,16 @@ export default function Home() {
                                     )}
                                     <span className="font-bold text-[#2D2D2D] truncate group-hover:text-[#FF9A8B]">{product.name}</span>
                                   </div>
-                                  <span className="font-black text-[#2D2D2D] ml-4 whitespace-nowrap">
-                                    {product.price.toLocaleString()}원
-                                  </span>
+                                  <div className="flex flex-col items-end gap-1 ml-4 whitespace-nowrap">
+                                    <span className="font-black text-[#2D2D2D]">
+                                      {product.price.toLocaleString()}원
+                                    </span>
+                                    {product.calories !== undefined && (
+                                      <span className="text-[11px] font-bold text-[#FF9A8B]">
+                                        {product.calories === 0 ? '저칼로리' : `${product.calories}kcal`}
+                                      </span>
+                                    )}
+                                  </div>
                                 </a>
                               ))}
                             </div>
@@ -339,11 +346,19 @@ export default function Home() {
                   </div>
                 )}
 
+                {products.length === 0 && selectedIngredient && !productLoading && (
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                    <div className="text-6xl mb-2">🥚</div>
+                    <div className="text-xl font-black text-[#2D2D2D]">상품을 찾지 못했어요</div>
+                    <p className="text-[#AEAEAE] font-medium">다른 재료를 선택하거나 <br />직접 검색해 보세요.</p>
+                  </div>
+                )}
+
                 {!selectedIngredient && !productLoading && (
                   <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                     <div className="text-6xl mb-2">🔍</div>
-                    <div className="text-xl font-black text-[#2D2D2D]">상품을 비교해보세요</div>
-                    <p className="text-[#AEAEAE] font-medium">왼쪽 리스트에서 재료를 선택하면 <br />가장 저렴한 상품을 추천해드려요</p>
+                    <div className="text-xl font-black text-[#2D2D2D]">상품 정보를 확인하세요</div>
+                    <p className="text-[#AEAEAE] font-medium">왼쪽 리스트에서 재료를 선택하면 <br />각 마켓별 상위 정보를 보여드려요</p>
                   </div>
                 )}
               </div>
