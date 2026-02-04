@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# AI Agent & Internal State
+/.agent/
+/.sisyphus/
+/debug-scrapers.js
+/test-scrapers.js
+/*.png
