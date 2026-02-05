@@ -1,0 +1,40 @@
+{
+    "manifest_version": 3,
+    "name": "CART.ai Helper",
+    "version": "1.0.0",
+    "description": "CART.ai 웹 서비스와 연동하여 마켓 장바구니에 상품을 자동으로 담아줍니다.",
+    "permissions": [
+        "tabs",
+        "scripting",
+        "activeTab"
+    ],
+    "host_permissions": [
+        "https://www.coupang.com/*",
+        "https://www.kurly.com/*",
+        "https://mart.baemin.com/*",
+        "http://localhost:3000/*"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.coupang.com/*",
+                "https://www.kurly.com/*",
+                "https://mart.baemin.com/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ],
+    "externally_connectable": {
+        "matches": [
+            "http://localhost:3000/*"
+        ]
+    }
+}

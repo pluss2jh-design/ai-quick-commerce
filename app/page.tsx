@@ -18,6 +18,10 @@ export default function Home() {
   const [productLoading, setProductLoading] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
 
+  const [cart, setCart] = useState<ProductInfo[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+
   const handleAnalyze = async () => {
     if (!input.trim()) return;
 
@@ -118,6 +122,71 @@ export default function Home() {
       window.open(baseFallbackUrl, '_blank');
     } finally {
       setProductLoading(false);
+    }
+  };
+
+  const toggleCart = () => setIsCartOpen(!isCartOpen);
+
+  const addToCart = (product: ProductInfo) => {
+    setCart(prev => {
+      if (prev.find(p => p.url === product.url)) return prev;
+      return [...prev, product];
+    });
+  };
+
+  const removeFromCart = (url: string) => {
+    setCart(prev => prev.filter(p => p.url !== url));
+  };
+
+  const [matchingStatus, setMatchingStatus] = useState<string>('');
+
+  const addAllCheapest = async () => {
+    if (ingredients.length === 0) return;
+    setIsBulkLoading(true);
+    setIsCartOpen(true);
+    setMatchingStatus('시작하는 중...');
+
+    try {
+      setMatchingStatus(`전체 ${ingredients.length}개 재료 매칭 시작...`);
+
+      const matchPromises = ingredients.map(async (ingredient, idx) => {
+        try {
+          const response = await fetch('/api/products/smart-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ingredient: ingredient.name,
+              amount: parseFloat(ingredient.amount),
+              unit: ingredient.unit,
+              filter: 'price',
+            }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            return result.data?.matchedProduct || null;
+          }
+        } catch (e) {
+          console.error(`Error matching ${ingredient.name}:`, e);
+        }
+        return null;
+      });
+
+      const matchedResults = await Promise.all(matchPromises);
+      const validResults = matchedResults.filter(Boolean) as ProductInfo[];
+
+      setCart(prev => {
+        const existingUrls = new Set(prev.map(p => p.url));
+        const filteredNew = validResults.filter(p => !existingUrls.has(p.url));
+        return [...prev, ...filteredNew];
+      });
+      setMatchingStatus(`성공적으로 ${validResults.length}개 상품을 찾았습니다!`);
+      setTimeout(() => setMatchingStatus(''), 3000);
+    } catch (error) {
+      console.error('Bulk add error:', error);
+      setMatchingStatus('오류가 발생했습니다.');
+    } finally {
+      setIsBulkLoading(false);
     }
   };
 
@@ -235,8 +304,29 @@ export default function Home() {
                   {isYoutubeInput ? title : `${title} 재료`}
                 </h2>
               </div>
-              <div className="text-[15px] font-medium text-[#8E8E8E] bg-[#FAFAFA] px-6 py-3 rounded-2xl border border-[#F3EFEA]">
-                총 <span className="text-[#FF9A8B] font-black">{ingredients.length}</span>개의 재료가 발견되었습니다
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="text-[15px] font-medium text-[#8E8E8E] bg-[#FAFAFA] px-6 py-3 rounded-2xl border border-[#F3EFEA]">
+                  총 <span className="text-[#FF9A8B] font-black">{ingredients.length}</span>개의 재료가 발견되었습니다
+                </div>
+                <button
+                  onClick={addAllCheapest}
+                  disabled={isBulkLoading}
+                  className="w-full md:w-auto px-8 py-3.5 bg-[#2D2D2D] hover:bg-black text-white text-[15px] font-black rounded-2xl shadow-xl shadow-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isBulkLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      매칭 중...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      전체 최저가 담기
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -313,30 +403,47 @@ export default function Home() {
                             </div>
                             <div className="space-y-2">
                               {platformProducts.slice(0, 3).map((product, idx) => (
-                                <a
+                                <div
                                   key={idx}
-                                  href={product.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
                                   className="flex items-center justify-between p-4 rounded-2xl bg-white border border-[#F3EFEA] hover:border-[#FF9A8B] hover:shadow-md transition-all group"
                                 >
-                                  <div className="flex items-center gap-4 min-w-0">
+                                  <a
+                                    href={product.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-4 min-w-0 flex-1"
+                                  >
                                     {product.imageUrl && (
                                       <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-xl object-cover bg-gray-50" />
                                     )}
                                     <span className="font-bold text-[#2D2D2D] truncate group-hover:text-[#FF9A8B]">{product.name}</span>
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1 ml-4 whitespace-nowrap">
-                                    <span className="font-black text-[#2D2D2D]">
-                                      {product.price.toLocaleString()}원
-                                    </span>
-                                    {product.calories !== undefined && (
-                                      <span className="text-[11px] font-bold text-[#FF9A8B]">
-                                        {product.calories === 0 ? '저칼로리' : `${product.calories}kcal`}
+                                  </a>
+                                  <div className="flex items-center gap-4 ml-4">
+                                    <div className="flex flex-col items-end gap-1 whitespace-nowrap">
+                                      <span className="font-black text-[#2D2D2D]">
+                                        {product.price.toLocaleString()}원
                                       </span>
-                                    )}
+                                      {product.calories !== undefined && (
+                                        <span className="text-[11px] font-bold text-[#FF9A8B]">
+                                          {product.calories === 0 ? '저칼로리' : `${product.calories}kcal`}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        addToCart(product);
+                                      }}
+                                      className="p-2.5 bg-[#FFF8F7] text-[#FF9A8B] hover:bg-[#FF9A8B] hover:text-white rounded-xl transition-all border border-[#FF9A8B]/10 active:scale-95"
+                                      title="장바구니 담기"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                      </svg>
+                                    </button>
                                   </div>
-                                </a>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -407,6 +514,178 @@ export default function Home() {
         </div>
       </footer>
 
+      <button
+        onClick={toggleCart}
+        className="fixed bottom-10 right-10 w-20 h-20 bg-[#2D2D2D] text-white rounded-[32px] shadow-2xl flex items-center justify-center group hover:scale-110 active:scale-95 transition-all z-[100]"
+      >
+        <div className="relative">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+          {cart.length > 0 && (
+            <div className="absolute -top-3 -right-3 w-7 h-7 bg-[#FF9A8B] text-white text-[13px] font-black rounded-full flex items-center justify-center border-4 border-[#2D2D2D] animate-bounce">
+              {cart.length}
+            </div>
+          )}
+        </div>
+      </button>
+
+      {/* Cart Sidebar Overlay */}
+      {isCartOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[110] animate-in fade-in duration-300"
+          onClick={toggleCart}
+        />
+      )}
+
+      {/* Cart Sidebar */}
+      <div className={`fixed top-0 right-0 h-full w-full md:w-[450px] bg-white shadow-[-20px_0_60px_rgba(0,0,0,0.05)] z-[120] transform transition-transform duration-500 ease-out ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex flex-col h-full">
+          <div className="p-8 border-b border-[#F3EFEA] flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-black text-[#2D2D2D]">장바구니</h2>
+              <p className="text-sm font-bold text-[#AEAEAE]">선택한 상품들을 확인하세요</p>
+            </div>
+            <button
+              onClick={toggleCart}
+              className="w-12 h-12 bg-[#FAFAFA] hover:bg-[#F3EFEA] text-[#AEAEAE] hover:text-[#2D2D2D] rounded-2xl flex items-center justify-center transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+            {isBulkLoading && (
+              <div className="bg-[#FFF8F7] border border-[#FF9A8B]/30 p-6 rounded-3xl flex flex-col items-center gap-4 animate-pulse">
+                <div className="w-8 h-8 border-4 border-[#FF9A8B]/30 border-t-[#FF9A8B] rounded-full animate-spin"></div>
+                <div className="text-center">
+                  <p className="font-black text-[#FF9A8B] text-sm">최적의 상품을 매칭 중입니다</p>
+                  <p className="text-[12px] font-bold text-[#AEAEAE] mt-1">{matchingStatus}</p>
+                </div>
+              </div>
+            )}
+
+            {cart.length === 0 && !isBulkLoading ? (
+              <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                <div className="text-6xl">🛒</div>
+                <p className="font-bold text-[#AEAEAE]">장바구니가 비어있습니다</p>
+              </div>
+            ) : (
+              cart.map((item, idx) => (
+                <div key={idx} className="group relative bg-[#FAFAFA] p-5 rounded-3xl border border-[#F3EFEA] hover:border-[#FF9A8B]/30 transition-all">
+                  <div className="flex gap-4">
+                    {item.imageUrl && (
+                      <img src={item.imageUrl} alt={item.name} className="w-20 h-20 rounded-2xl object-cover bg-white shadow-sm" />
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="text-[11px] font-black text-[#FF9A8B] uppercase tracking-wider">
+                        {item.platform === 'coupang' && 'Coupang'}
+                        {item.platform === 'kurly' && 'Kurly'}
+                        {item.platform === 'baemin' && 'Baemin B-Mart'}
+                      </div>
+                      <h4 className="font-bold text-[#2D2D2D] truncate text-[15px]">{item.name}</h4>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="font-black text-lg text-[#2D2D2D]">{item.price.toLocaleString()}원</span>
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[12px] font-black text-[#FF9A8B] hover:underline"
+                        >
+                          상품보기
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFromCart(item.url)}
+                    className="absolute -top-2 -right-2 w-8 h-8 bg-white text-[#AEAEAE] hover:text-[#FF5252] rounded-full shadow-lg border border-[#F3EFEA] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {cart.length > 0 && (
+            <div className="p-8 bg-[#FAFAFA] border-t border-[#F3EFEA] space-y-6">
+              <div className="bg-white border border-[#F3EFEA] p-4 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2 text-[#FF9A8B]">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-[13px] font-black">안내사항</span>
+                </div>
+                <p className="text-[12px] font-bold text-[#AEAEAE] leading-relaxed">
+                  자동 담기 기능을 이용하시려면 크롬 확장 프로그램을 설치하고 마켓에 로그인되어 있어야 합니다. 설치되지 않은 경우 각 상품 페이지가 직접 열립니다.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-[#8E8E8E]">총 주문 금액</span>
+                <span className="text-3xl font-black text-[#2D2D2D]">
+                  {cart.reduce((sum, item) => sum + item.price, 0).toLocaleString()}원
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {['coupang', 'kurly', 'baemin'].map(platform => {
+                  const items = cart.filter(p => p.platform === platform);
+                  if (items.length === 0) return null;
+
+                  return (
+                    <button
+                      key={platform}
+                      onClick={async () => {
+                        // 확장 프로그램 아이디 (나중에 고정값으로 설정 가능)
+                        const EXTENSION_ID = "YOUR_EXTENSION_ID_HERE";
+                        try {
+                          // @ts-ignore
+                          if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+                            // @ts-ignore
+                            window.chrome.runtime.sendMessage(EXTENSION_ID, {
+                              action: "START_MARKET_SYNC",
+                              products: items
+                            }, (response: any) => {
+                              // @ts-ignore
+                              if (window.chrome.runtime.lastError) {
+                                // 확장 프로그램이 없으면 기존 방식(탭 열기)으로 폴백
+                                items.forEach(item => window.open(item.url, '_blank'));
+                              } else {
+                                alert(`${platform} 장바구니 동기화를 시작합니다! (확장 프로그램 작동)`);
+                              }
+                            });
+                          } else {
+                            // 일반 브라우저면 기존 방식
+                            items.forEach(item => window.open(item.url, '_blank'));
+                          }
+                        } catch (e) {
+                          items.forEach(item => window.open(item.url, '_blank'));
+                        }
+                      }}
+                      className={`w-full py-4 text-white text-[15px] font-black rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${platform === 'coupang' ? 'bg-[#0074E9]' :
+                        platform === 'kurly' ? 'bg-[#5f0080]' : 'bg-[#2ac1bc]'
+                        }`}
+                    >
+                      <span className="opacity-80">
+                        {platform === 'coupang' && '쿠팡'}
+                        {platform === 'kurly' && '마켓컬리'}
+                        {platform === 'baemin' && '배민B마트'}
+                      </span>
+                      {items.length}개 상품 장바구니에 담기
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@100..900&display=swap');
         
@@ -426,6 +705,14 @@ export default function Home() {
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #FF9A8B;
+        }
+
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-3px); }
+        }
+        .animate-bounce {
+          animation: bounce 1s infinite;
         }
       `}</style>
     </main>
