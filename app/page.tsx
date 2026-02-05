@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Ingredient } from '@/packages/shared/src/types';
 import type { ProductInfo } from '@/packages/scraper/src/index';
 
@@ -21,6 +21,29 @@ export default function Home() {
   const [cart, setCart] = useState<ProductInfo[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+
+  const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
+  const [extensionId, setExtensionId] = useState('khpgcnkhpgcnkhpgcnkhpgcnkhpgcnkh'); // 기본값 혹은 사용자 설정
+  const [showExtensionGuide, setShowExtensionGuide] = useState(false);
+
+  useEffect(() => {
+    const savedId = localStorage.getItem('cart_ai_ext_id');
+    if (savedId) setExtensionId(savedId);
+
+    // 1초 후 확인 (컨텐츠 스크립트 주입 대기)
+    const timer = setTimeout(() => {
+      // @ts-ignore
+      if (window.__CART_AI_EXTENSION_INSTALLED__) {
+        setIsExtensionInstalled(true);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const updateExtensionId = (id: string) => {
+    setExtensionId(id);
+    localStorage.setItem('cart_ai_ext_id', id);
+  };
 
   const handleAnalyze = async () => {
     if (!input.trim()) return;
@@ -612,83 +635,132 @@ export default function Home() {
             )}
           </div>
 
-          {cart.length > 0 && (
-            <div className="p-8 bg-[#FAFAFA] border-t border-[#F3EFEA] space-y-6">
-              <div className="bg-white border border-[#F3EFEA] p-4 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 text-[#FF9A8B]">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-[13px] font-black">안내사항</span>
-                </div>
-                <p className="text-[12px] font-bold text-[#AEAEAE] leading-relaxed">
-                  자동 담기 기능을 이용하시려면 크롬 확장 프로그램을 설치하고 마켓에 로그인되어 있어야 합니다. 설치되지 않은 경우 각 상품 페이지가 직접 열립니다.
-                </p>
-              </div>
-
+          <div className="p-8 bg-[#FAFAFA] border-t border-[#F3EFEA] space-y-6">
+            <div className="bg-white border border-[#F3EFEA] p-5 rounded-3xl space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-bold text-[#8E8E8E]">총 주문 금액</span>
-                <span className="text-3xl font-black text-[#2D2D2D]">
-                  {cart.reduce((sum, item) => sum + item.price, 0).toLocaleString()}원
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isExtensionInstalled ? 'bg-green-500 animate-pulse' : 'bg-[#AEAEAE]'}`}></div>
+                  <span className="text-[13px] font-black text-[#2D2D2D]">
+                    {isExtensionInstalled ? '확장 프로그램이 연결되었습니다' : '확장 프로그램 미설치'}
+                  </span>
+                </div>
+                {!isExtensionInstalled && (
+                  <button
+                    onClick={() => setShowExtensionGuide(!showExtensionGuide)}
+                    className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
+                  >
+                    설치 방법 보기
+                  </button>
+                )}
               </div>
-              <div className="flex flex-col gap-3">
-                {['coupang', 'kurly', 'baemin'].map(platform => {
-                  const items = cart.filter(p => p.platform === platform);
-                  if (items.length === 0) return null;
 
-                  return (
+              {!isExtensionInstalled && (
+                <div className="bg-[#FAFAFA] border border-[#F3EFEA] p-4 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12px] font-black text-[#2D2D2D]">확장 프로그램 ID 설정</p>
                     <button
-                      key={platform}
-                      onClick={async () => {
-                        // 확장 프로그램 아이디 (나중에 고정값으로 설정 가능)
-                        const EXTENSION_ID = "YOUR_EXTENSION_ID_HERE";
-                        try {
-                          // @ts-ignore
-                          if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+                      onClick={() => setShowExtensionGuide(!showExtensionGuide)}
+                      className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
+                    >
+                      설치 방법 보기
+                    </button>
+                  </div>
+
+                  {showExtensionGuide && (
+                    <p className="text-[11px] font-bold text-[#8E8E8E] leading-relaxed pb-2 border-b border-dashed border-[#F3EFEA]">
+                      1. <code className="bg-white px-1.5 py-0.5 rounded border">apps/extension</code> 폴더 로드<br />
+                      2. 생성된 <span className="text-[#FF9A8B]">ID</span> 입력 후 [연결 확인] 클릭
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={extensionId}
+                      onChange={(e) => updateExtensionId(e.target.value)}
+                      placeholder="확장 프로그램 ID 입력"
+                      className="flex-1 text-[11px] bg-white border border-[#F3EFEA] rounded-lg px-3 py-2 outline-none focus:border-[#FF9A8B] font-mono"
+                    />
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-3 py-2 bg-[#2D2D2D] text-white text-[11px] font-black rounded-lg hover:bg-black transition-all"
+                    >
+                      연결 확인
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] font-medium text-[#AEAEAE] leading-relaxed">
+                자동 담기 기능을 이용하려면 마켓에 로그인되어 있어야 합니다. 연결되지 않은 경우 페이지가 개별적으로 열립니다.
+              </p>
+            </div>
+
+            {cart.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-[#8E8E8E]">총 주문 금액</span>
+                  <span className="text-3xl font-black text-[#2D2D2D]">
+                    {cart.reduce((sum, item) => sum + item.price, 0).toLocaleString()}원
+                  </span>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {['coupang', 'kurly', 'baemin'].map(platform => {
+                    const items = cart.filter(p => p.platform === platform);
+                    if (items.length === 0) return null;
+
+                    return (
+                      <button
+                        key={platform}
+                        onClick={async () => {
+                          const EXT_ID = extensionId;
+                          try {
                             // @ts-ignore
-                            window.chrome.runtime.sendMessage(EXTENSION_ID, {
-                              action: "START_MARKET_SYNC",
-                              products: items
-                            }, (response: any) => {
+                            if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
                               // @ts-ignore
-                              if (window.chrome.runtime.lastError) {
-                                // 확장 프로그램이 없으면 기존 방식(탭 열기)으로 폴백
-                                items.forEach(item => window.open(item.url, '_blank'));
-                              } else {
-                                alert(`${platform} 장바구니 동기화를 시작합니다! (확장 프로그램 작동)`);
-                              }
-                            });
-                          } else {
-                            // 일반 브라우저면 기존 방식
+                              window.chrome.runtime.sendMessage(EXT_ID, {
+                                action: "START_MARKET_SYNC",
+                                products: items
+                              }, (response: any) => {
+                                // @ts-ignore
+                                if (window.chrome.runtime.lastError) {
+                                  // 확장 프로그램이 없으면 기존 방식(탭 열기)으로 폴백
+                                  items.forEach(item => window.open(item.url, '_blank'));
+                                } else {
+                                  alert(`${platform} 장바구니 동기화를 시작합니다! (확장 프로그램 작동)`);
+                                }
+                              });
+                            } else {
+                              // 일반 브라우저면 기존 방식
+                              items.forEach(item => window.open(item.url, '_blank'));
+                            }
+                          } catch (e) {
                             items.forEach(item => window.open(item.url, '_blank'));
                           }
-                        } catch (e) {
-                          items.forEach(item => window.open(item.url, '_blank'));
-                        }
-                      }}
-                      className={`w-full py-4 text-white text-[15px] font-black rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${platform === 'coupang' ? 'bg-[#0074E9]' :
-                        platform === 'kurly' ? 'bg-[#5f0080]' : 'bg-[#2ac1bc]'
-                        }`}
-                    >
-                      <span className="opacity-80">
-                        {platform === 'coupang' && '쿠팡'}
-                        {platform === 'kurly' && '마켓컬리'}
-                        {platform === 'baemin' && '배민B마트'}
-                      </span>
-                      {items.length}개 상품 장바구니에 담기
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                        }}
+                        className={`w-full py-4 text-white text-[15px] font-black rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${platform === 'coupang' ? 'bg-[#0074E9]' :
+                          platform === 'kurly' ? 'bg-[#5f0080]' : 'bg-[#2ac1bc]'
+                          }`}
+                      >
+                        <span className="opacity-80">
+                          {platform === 'coupang' && '쿠팡'}
+                          {platform === 'kurly' && '마켓컬리'}
+                          {platform === 'baemin' && '배민B마트'}
+                        </span>
+                        {items.length}개 상품 장바구니에 담기
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@100..900&display=swap');
-        
+
         body {
           font-family: 'Pretendard', sans-serif;
         }

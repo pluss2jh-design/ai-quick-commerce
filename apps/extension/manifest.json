@@ -25,7 +25,8 @@
             "matches": [
                 "https://www.coupang.com/*",
                 "https://www.kurly.com/*",
-                "https://mart.baemin.com/*"
+                "https://mart.baemin.com/*",
+                "http://localhost:3000/*"
             ],
             "js": [
                 "content.js"
