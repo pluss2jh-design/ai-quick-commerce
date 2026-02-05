@@ -1,6 +1,11 @@
 
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
     // 웹사이트(localhost:3000)에서 보낸 메시지 수신
+    if (request.action === "PING") {
+        sendResponse({ status: "pong" });
+        return;
+    }
+
     if (request.action === "START_MARKET_SYNC") {
         const { products } = request;
         console.log("[CART.ai] Received sync request for items:", products.length);

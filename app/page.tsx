@@ -23,26 +23,62 @@ export default function Home() {
   const [isBulkLoading, setIsBulkLoading] = useState(false);
 
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
-  const [extensionId, setExtensionId] = useState('khpgcnkhpgcnkhpgcnkhpgcnkhpgcnkh'); // 기본값 혹은 사용자 설정
+  const [extensionId, setExtensionId] = useState(''); // 초기값 비움
   const [showExtensionGuide, setShowExtensionGuide] = useState(false);
 
   useEffect(() => {
     const savedId = localStorage.getItem('cart_ai_ext_id');
-    if (savedId) setExtensionId(savedId);
-
-    // 1초 후 확인 (컨텐츠 스크립트 주입 대기)
-    const timer = setTimeout(() => {
+    if (savedId && savedId.trim() !== '') {
+      setExtensionId(savedId);
+      // 저장된 ID가 있으면 즉시 연결 확인 시도
       // @ts-ignore
-      if (window.__CART_AI_EXTENSION_INSTALLED__) {
-        setIsExtensionInstalled(true);
+      if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+        try {
+          // @ts-ignore
+          window.chrome.runtime.sendMessage(savedId, { action: 'PING' }, (response) => {
+            if (response && response.status === 'pong') {
+              setIsExtensionInstalled(true);
+            } else {
+              setIsExtensionInstalled(false);
+            }
+          });
+        } catch (e) {
+          setIsExtensionInstalled(false);
+        }
       }
-    }, 1000);
-    return () => clearTimeout(timer);
+    }
   }, []);
 
   const updateExtensionId = (id: string) => {
     setExtensionId(id);
     localStorage.setItem('cart_ai_ext_id', id);
+
+    if (!id.trim()) {
+      setIsExtensionInstalled(false);
+      return;
+    }
+
+    // ID 입력 시 즉시 연결 확인 시도
+    // @ts-ignore
+    if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+      try {
+        // @ts-ignore
+        window.chrome.runtime.sendMessage(id, { action: 'PING' }, (response) => {
+          // @ts-ignore
+          if (window.chrome.runtime.lastError) {
+            setIsExtensionInstalled(false);
+            return;
+          }
+          if (response && response.status === 'pong') {
+            setIsExtensionInstalled(true);
+          } else {
+            setIsExtensionInstalled(false);
+          }
+        });
+      } catch (e) {
+        setIsExtensionInstalled(false);
+      }
+    }
   };
 
   const handleAnalyze = async () => {
@@ -674,13 +710,25 @@ export default function Home() {
                   )}
 
                   <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={extensionId}
-                      onChange={(e) => updateExtensionId(e.target.value)}
-                      placeholder="확장 프로그램 ID 입력"
-                      className="flex-1 text-[11px] bg-white border border-[#F3EFEA] rounded-lg px-3 py-2 outline-none focus:border-[#FF9A8B] font-mono"
-                    />
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={extensionId}
+                        onChange={(e) => updateExtensionId(e.target.value)}
+                        placeholder="확장 프로그램 ID 입력"
+                        className="w-full text-[11px] bg-white border border-[#F3EFEA] rounded-lg px-3 py-2 outline-none focus:border-[#FF9A8B] font-mono pr-8"
+                      />
+                      {extensionId && (
+                        <button
+                          onClick={() => updateExtensionId('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#AEAEAE] hover:text-[#FF5252]"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                     <button
                       onClick={() => window.location.reload()}
                       className="px-3 py-2 bg-[#2D2D2D] text-white text-[11px] font-black rounded-lg hover:bg-black transition-all"

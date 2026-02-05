@@ -1,10 +1,4 @@
 
-// 웹 앱에서 확장 프로그램 설치 여부를 확인할 수 있도록 플래그 주입
-const script = document.createElement('script');
-script.textContent = 'window.__CART_AI_EXTENSION_INSTALLED__ = true;';
-(document.head || document.documentElement).appendChild(script);
-script.remove();
-
 // 마켓별 장바구니 담기 버튼 셀렉터 정보
 const MARKET_CONFIG = {
     coupang: {
