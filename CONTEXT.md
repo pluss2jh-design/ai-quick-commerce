@@ -6,9 +6,9 @@
 ---
 
 ## 📅 최종 업데이트
-**날짜**: 2026-02-03  
+**날짜**: 2026-02-05  
 **작성자**: Atlas (OhMyOpenCode)  
-**현재 단계**: Phase 1 - AI 재료 추출 API 및 UI 연동 완료
+**현재 단계**: Phase 2 - 크롬 확장 프로그램 안정화 및 UX 개선
 
 ---
 
@@ -281,19 +281,11 @@ ingredient-cart-service/
 
 ## 🔄 변경 이력
 
-### 2026-02-03
-- **Phase 1: AI 재료 추출 API 및 UI 연동 완료**
-  - Claude API 연동 로직 구현 (`packages/ai/src/index.ts`)
-    - `extractIngredientsFromText()`: 레시피 텍스트에서 재료 추출
-    - `extractIngredientsFromDishName()`: 요리명에서 재료 추출
-  - 재료 추출 API 엔드포인트 생성 (`app/api/ai/ingredients/route.ts`)
-    - POST `/api/ai/ingredients`: 음식명 또는 유튜브 링크에서 재료 추출
-    - inputType: 'food' | 'youtube' 지원
-  - 프론트엔드 UI 구현 및 API 연동
-    - `FoodInputCard`, `IngredientListCard` 컴포넌트 생성
-    - `page.tsx` 메인 페이지에서 API 호출 및 결과 표시
-    - 로딩 상태 및 에러 핸들링 구현
-  - 임시 데이터 제거, 실제 Claude API 연동 완료
+### 2026-02-05
+- **크롬 확장 프로그램 안정성 및 UX 개선**
+  - **단일 탭 재사용 구조 도입**: `background.js` 리팩토링으로 여러 탭이 번거롭게 열리고 닫히는 문제 해결 (UX 개선)
+  - **장바구니 담기 성공률 향상**: `content.js`에 버튼 폴링(Polling) 및 재시도 로직 추가 (8/11개만 담기던 문제 해결)
+  - **진행 상태 동기화 개선**: 웹 앱과 확장 프로그램 간의 메시지 통신 강화로 실시간 진행률 표시 최적화
 
 ### 2026-02-04
 - **AI 프롬프트 개선 - 1인 기준 재료양 추출**
@@ -344,6 +336,20 @@ ingredient-cart-service/
     - [전체 최저가 담기] 버튼: 모든 재료에 대해 AI가 자동으로 최적 상품을 찾아 장바구니에 일괄 추가
     - 플로팅 장바구니 버튼 및 슬라이딩 사이드바 UI 구현
     - 총 주문 금액 자동 계산 및 전체 상품 결제 페이지 일괄 열기 기능 추가
+
+### 2026-02-03
+- **Phase 1: AI 재료 추출 API 및 UI 연동 완료**
+  - Claude API 연동 로직 구현 (`packages/ai/src/index.ts`)
+    - `extractIngredientsFromText()`: 레시피 텍스트에서 재료 추출
+    - `extractIngredientsFromDishName()`: 요리명에서 재료 추출
+  - 재료 추출 API 엔드포인트 생성 (`app/api/ai/ingredients/route.ts`)
+    - POST `/api/ai/ingredients`: 음식명 또는 유튜브 링크에서 재료 추출
+    - inputType: 'food' | 'youtube' 지원
+  - 프론트엔드 UI 구현 및 API 연동
+    - `FoodInputCard`, `IngredientListCard` 컴포넌트 생성
+    - `page.tsx` 메인 페이지에서 API 호출 및 결과 표시
+    - 로딩 상태 및 에러 핸들링 구현
+  - 임시 데이터 제거, 실제 Claude API 연동 완료
 
 ### 2026-02-02
 - **프로젝트 초기화**

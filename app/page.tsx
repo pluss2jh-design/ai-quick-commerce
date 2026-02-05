@@ -23,14 +23,63 @@ export default function Home() {
   const [isBulkLoading, setIsBulkLoading] = useState(false);
 
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
-  const [extensionId, setExtensionId] = useState(''); // 초기값 비움
+  const [extensionId, setExtensionId] = useState('');
   const [showExtensionGuide, setShowExtensionGuide] = useState(false);
+
+  const [syncStatus, setSyncStatus] = useState<{
+    isSyncing: boolean;
+    progress: number;
+    total: number;
+    currentProduct?: string;
+    items: { name: string; status: 'processing' | 'success' | 'error'; error?: string }[];
+    cartUrl?: string;
+  }>({
+    isSyncing: false,
+    progress: 0,
+    total: 0,
+    items: []
+  });
+
+  useEffect(() => {
+    // @ts-ignore
+    if (window.chrome && window.chrome.runtime && window.chrome.runtime.onMessage) {
+      const listener = (message: any) => {
+        if (message.action === "SYNC_PROGRESS") {
+          setSyncStatus(prev => {
+            const newItems = [...prev.items];
+            if (message.productName) {
+              newItems[message.index] = { name: message.productName, status: message.status };
+            } else {
+              newItems[message.index] = { ...newItems[message.index], status: message.status, error: message.error };
+            }
+            return {
+              ...prev,
+              progress: message.index + 1,
+              currentProduct: message.productName || prev.currentProduct,
+              items: newItems
+            };
+          });
+        } else if (message.action === "SYNC_COMPLETE") {
+          setSyncStatus(prev => ({
+            ...prev,
+            isSyncing: false,
+            cartUrl: message.cartUrl
+          }));
+          alert('장바구니 담기가 완료되었습니다!');
+        }
+      };
+
+      // @ts-ignore
+      window.chrome.runtime.onMessage.addListener(listener);
+      // @ts-ignore
+      return () => window.chrome.runtime.onMessage.removeListener(listener);
+    }
+  }, []);
 
   useEffect(() => {
     const savedId = localStorage.getItem('cart_ai_ext_id');
     if (savedId && savedId.trim() !== '') {
       setExtensionId(savedId);
-      // 저장된 ID가 있으면 즉시 연결 확인 시도
       // @ts-ignore
       if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
         try {
@@ -58,7 +107,6 @@ export default function Home() {
       return;
     }
 
-    // ID 입력 시 즉시 연결 확인 시도
     // @ts-ignore
     if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
       try {
@@ -170,7 +218,6 @@ export default function Home() {
       const result = await response.json();
       let targetUrl = baseFallbackUrl;
 
-      // 스크래핑 성공 시 가장 적합한 상품의 상세 페이지로 바로 이동
       if (response.ok && result.data?.matchedProduct?.url) {
         targetUrl = result.data.matchedProduct.url;
       }
@@ -589,7 +636,6 @@ export default function Home() {
         </div>
       </button>
 
-      {/* Cart Sidebar Overlay */}
       {isCartOpen && (
         <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[110] animate-in fade-in duration-300"
@@ -597,7 +643,6 @@ export default function Home() {
         />
       )}
 
-      {/* Cart Sidebar */}
       <div className={`fixed top-0 right-0 h-full w-full md:w-[450px] bg-white shadow-[-20px_0_60px_rgba(0,0,0,0.05)] z-[120] transform transition-transform duration-500 ease-out ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex flex-col h-full">
           <div className="p-8 border-b border-[#F3EFEA] flex items-center justify-between">
@@ -690,54 +735,52 @@ export default function Home() {
                 )}
               </div>
 
-              {!isExtensionInstalled && (
-                <div className="bg-[#FAFAFA] border border-[#F3EFEA] p-4 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-black text-[#2D2D2D]">확장 프로그램 ID 설정</p>
-                    <button
-                      onClick={() => setShowExtensionGuide(!showExtensionGuide)}
-                      className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
-                    >
-                      설치 방법 보기
-                    </button>
-                  </div>
-
-                  {showExtensionGuide && (
-                    <p className="text-[11px] font-bold text-[#8E8E8E] leading-relaxed pb-2 border-b border-dashed border-[#F3EFEA]">
-                      1. <code className="bg-white px-1.5 py-0.5 rounded border">apps/extension</code> 폴더 로드<br />
-                      2. 생성된 <span className="text-[#FF9A8B]">ID</span> 입력 후 [연결 확인] 클릭
-                    </p>
-                  )}
-
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={extensionId}
-                        onChange={(e) => updateExtensionId(e.target.value)}
-                        placeholder="확장 프로그램 ID 입력"
-                        className="w-full text-[11px] bg-white border border-[#F3EFEA] rounded-lg px-3 py-2 outline-none focus:border-[#FF9A8B] font-mono pr-8"
-                      />
-                      {extensionId && (
-                        <button
-                          onClick={() => updateExtensionId('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#AEAEAE] hover:text-[#FF5252]"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-3 py-2 bg-[#2D2D2D] text-white text-[11px] font-black rounded-lg hover:bg-black transition-all"
-                    >
-                      연결 확인
-                    </button>
-                  </div>
+              <div className="bg-[#FAFAFA] border border-[#F3EFEA] p-4 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[12px] font-black text-[#2D2D2D]">확장 프로그램 {isExtensionInstalled ? '연결 정보' : 'ID 설정'}</p>
+                  <button
+                    onClick={() => setShowExtensionGuide(!showExtensionGuide)}
+                    className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
+                  >
+                    설치 방법 보기
+                  </button>
                 </div>
-              )}
+
+                {showExtensionGuide && (
+                  <p className="text-[11px] font-bold text-[#8E8E8E] leading-relaxed pb-2 border-b border-dashed border-[#F3EFEA]">
+                    1. <code className="bg-white px-1.5 py-0.5 rounded border">apps/extension</code> 폴더 로드<br />
+                    2. 생성된 <span className="text-[#FF9A8B]">ID</span> 입력 후 [연결 확인] 클릭
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={extensionId}
+                      onChange={(e) => updateExtensionId(e.target.value)}
+                      placeholder="확장 프로그램 ID 입력"
+                      className={`w-full text-[11px] bg-white border rounded-lg px-3 py-2 outline-none font-mono pr-8 ${isExtensionInstalled ? 'border-green-200 focus:border-green-500' : 'border-[#F3EFEA] focus:border-[#FF9A8B]'}`}
+                    />
+                    {extensionId && (
+                      <button
+                        onClick={() => updateExtensionId('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#AEAEAE] hover:text-[#FF5252]"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-3 py-2 bg-[#2D2D2D] text-white text-[11px] font-black rounded-lg hover:bg-black transition-all"
+                  >
+                    연결 확인
+                  </button>
+                </div>
+              </div>
 
               <p className="text-[11px] font-medium text-[#AEAEAE] leading-relaxed">
                 자동 담기 기능을 이용하려면 마켓에 로그인되어 있어야 합니다. 연결되지 않은 경우 페이지가 개별적으로 열립니다.
@@ -762,6 +805,15 @@ export default function Home() {
                         key={platform}
                         onClick={async () => {
                           const EXT_ID = extensionId;
+
+                          setSyncStatus({
+                            isSyncing: true,
+                            progress: 0,
+                            total: items.length,
+                            items: items.map(p => ({ name: p.name, status: 'processing' as const })),
+                            cartUrl: undefined
+                          });
+
                           try {
                             // @ts-ignore
                             if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
@@ -772,17 +824,16 @@ export default function Home() {
                               }, (response: any) => {
                                 // @ts-ignore
                                 if (window.chrome.runtime.lastError) {
-                                  // 확장 프로그램이 없으면 기존 방식(탭 열기)으로 폴백
+                                  setSyncStatus(prev => ({ ...prev, isSyncing: false }));
                                   items.forEach(item => window.open(item.url, '_blank'));
-                                } else {
-                                  alert(`${platform} 장바구니 동기화를 시작합니다! (확장 프로그램 작동)`);
                                 }
                               });
                             } else {
-                              // 일반 브라우저면 기존 방식
+                              setSyncStatus(prev => ({ ...prev, isSyncing: false }));
                               items.forEach(item => window.open(item.url, '_blank'));
                             }
                           } catch (e) {
+                            setSyncStatus(prev => ({ ...prev, isSyncing: false }));
                             items.forEach(item => window.open(item.url, '_blank'));
                           }
                         }}
@@ -804,37 +855,83 @@ export default function Home() {
             )}
           </div>
         </div>
-      </div>
 
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@100..900&display=swap');
+        {syncStatus.isSyncing && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
+              <div className="text-center space-y-2">
+                <div className="text-4xl mb-4">🛒</div>
+                <h3 className="text-2xl font-black text-[#2D2D2D]">장바구니에 담는 중...</h3>
+                <p className="text-[#8E8E8E] font-medium text-sm">마켓 장바구니에 상품을 안전하게 옮기고 있어요</p>
+              </div>
 
-        body {
-          font-family: 'Pretendard', sans-serif;
-        }
+              <div className="space-y-4">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-sm font-black text-[#FF9A8B]">{syncStatus.progress} / {syncStatus.total}</span>
+                  <span className="text-xs font-bold text-[#AEAEAE] uppercase tracking-wider">Progress</span>
+                </div>
+                <div className="h-3 bg-[#F3EFEA] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#FF9A8B] transition-all duration-500 ease-out"
+                    style={{ width: `${(syncStatus.progress / syncStatus.total) * 100}%` }}
+                  />
+                </div>
+              </div>
 
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #F3EFEA;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #FF9A8B;
-        }
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-3 pr-2">
+                {syncStatus.items.map((item, idx) => (
+                  <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${item.status === 'processing' ? 'bg-[#FFF9F8] border-[#FF9A8B]/20 animate-pulse' :
+                    item.status === 'success' ? 'bg-[#F6FFF8] border-green-100' :
+                      'bg-[#FFF5F5] border-red-100'
+                    }`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-2 h-2 rounded-full ${item.status === 'processing' ? 'bg-[#FF9A8B]' :
+                        item.status === 'success' ? 'bg-green-500' : 'bg-red-500'
+                        }`} />
+                      <span className="text-[13px] font-bold text-[#2D2D2D] truncate">{item.name}</span>
+                    </div>
+                    <span className={`text-[11px] font-black uppercase tracking-tighter shrink-0 ${item.status === 'processing' ? 'text-[#FF9A8B]' :
+                      item.status === 'success' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                      {item.status === 'processing' ? '담는 중' : item.status === 'success' ? '완료' : '실패'}
+                    </span>
+                  </div>
+                ))}
+              </div>
 
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
-        }
-        .animate-bounce {
-          animation: bounce 1s infinite;
-        }
-      `}</style>
+              <p className="text-[11px] text-center text-[#AEAEAE] font-medium italic leading-tight">
+                * 마켓 사이트의 보안 정책 및 응답 속도에 따라<br />다소 시간이 걸릴 수 있습니다.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!syncStatus.isSyncing && syncStatus.cartUrl && (
+          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-5 duration-500 w-[calc(100%-48px)] max-w-lg">
+            <div className="bg-[#2D2D2D] text-white px-8 py-5 rounded-[32px] shadow-2xl flex flex-col md:flex-row items-center gap-6 border border-white/10">
+              <div className="flex flex-col flex-1 text-center md:text-left">
+                <span className="text-xs font-black text-[#FF9A8B] uppercase tracking-widest mb-1">Success</span>
+                <span className="font-bold">장바구니 담기가 모두 완료되었습니다!</span>
+              </div>
+              <div className="flex gap-3 w-full md:w-auto">
+                <button
+                  onClick={() => setSyncStatus(prev => ({ ...prev, cartUrl: undefined }))}
+                  className="flex-1 md:flex-none px-5 py-2.5 rounded-2xl text-[13px] font-black border border-white/20 hover:bg-white/10 transition-all"
+                >
+                  닫기
+                </button>
+                <a
+                  href={syncStatus.cartUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-[2] md:flex-none px-6 py-2.5 bg-[#FF9A8B] text-white rounded-2xl text-[13px] font-black hover:scale-105 active:scale-95 transition-all shadow-lg text-center"
+                >
+                  마켓 장바구니 가기
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
     </main>
   );
 }
