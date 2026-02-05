@@ -108,7 +108,8 @@ export function findBestMatchByWeight(
   products: ProductInfo[],
   targetWeight: number,
   targetUnit: string,
-  filter: 'price' | 'calorie'
+  filter: 'price' | 'calorie',
+  ingredientName?: string
 ): ProductInfo | null {
   const unitNormalizedTarget = targetUnit === 'kg' || targetUnit === 'L' || targetUnit === 'l'
     ? targetWeight * 1000
@@ -117,17 +118,31 @@ export function findBestMatchByWeight(
   const productsWithWeight = products.map(p => {
     const weightInfo = extractWeightFromName(p.name);
     const calories = p.calories ?? extractCaloriesFromName(p.name);
+    const matchScore = ingredientName ? calculateMatchScore(ingredientName, p.name) : 100;
+
     return {
       ...p,
       parsedWeight: weightInfo?.weight || 0,
       parsedUnit: weightInfo?.unit || 'ea',
-      calories: calories !== null ? calories : undefined
+      calories: calories !== null ? calories : undefined,
+      matchScore
     };
   });
 
+  // 0. 매칭 점수가 너무 낮은 상품 제외 (소금빵, 소금과자 등)
+  // 매칭 점수가 0 이상인 상품만 선택 (음수는 제외)
+  const goodMatches = ingredientName
+    ? productsWithWeight.filter(p => (p as any).matchScore > 0)
+    : productsWithWeight;
+
+  if (goodMatches.length === 0) {
+    console.log('[Match Filter] All products filtered out due to low match score');
+    return null;
+  }
+
   // 1. 유효한 무게 정보가 있는 상품만 필터링
-  const validProducts = productsWithWeight.filter(p => p.parsedWeight > 0);
-  if (validProducts.length === 0) return products[0] || null;
+  const validProducts = goodMatches.filter(p => p.parsedWeight > 0);
+  if (validProducts.length === 0) return goodMatches[0] || null;
 
   // 2. 티어 기반 매칭 (용량 적합도 우선)
 
@@ -161,6 +176,11 @@ export function findBestMatchByWeight(
   // 4. 결정된 후보군 내에서 필터(최저가/저칼로리) 적용하여 정렬
   if (filter === 'price') {
     candidates.sort((a, b) => {
+      // 0순위: 매칭 점수 (내림차순) - 더 정확한 매칭 우선
+      const aScore = (a as any).matchScore || 0;
+      const bScore = (b as any).matchScore || 0;
+      if (aScore !== bScore) return bScore - aScore;
+
       // 1순위: 가격 (오름차순)
       if (a.price !== b.price) return a.price - b.price;
       // 2순위: 무게 차이 (오름차순) - 가격이 같다면 용량이 더 적절한 것 선택
@@ -168,6 +188,11 @@ export function findBestMatchByWeight(
     });
   } else if (filter === 'calorie') {
     candidates.sort((a, b) => {
+      // 0순위: 매칭 점수 (내림차순) - 더 정확한 매칭 우선
+      const aScore = (a as any).matchScore || 0;
+      const bScore = (b as any).matchScore || 0;
+      if (aScore !== bScore) return bScore - aScore;
+
       const aCal = a.calories || 9999;
       const bCal = b.calories || 9999;
       // 1순위: 칼로리 (오름차순)
@@ -368,8 +393,85 @@ export async function searchCoupang(ingredientName: string): Promise<ProductInfo
   }
 }
 
+/**
+ * 재료명 정제 함수 - 검색 정확도를 위해 괄호만 공백으로 변환
+ * 예: "돼지고기(다짐육)" -> "돼지고기 다짐육"
+ * 예: "[KF365] 1+등급 무항생제 특란 10구" -> "[KF365] 1+등급 무항생제 특란 10구" (그대로 유지)
+ * 
+ * 주의: 대괄호[]는 유지하여 브랜드명 등 중요 정보를 보존
+ */
+function extractCoreIngredient(ingredientName: string): string {
+  // 소괄호()만 제거하고 대괄호[]는 유지 (예: 돼지고기(다짐육) -> 돼지고기 다짐육)
+  let cleaned = ingredientName.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
+
+/**
+ * 상품명에서 검색에 사용할 핵심 키워드를 추출하는 함수
+ * 대괄호로 묶인 접두사([선물세트], [특가] 등)를 제거하고 실제 상품명만 추출
+ */
+function extractProductSearchKeyword(productName: string): string {
+  // 대괄호로 시작하는 접두사 제거 (예: [선물세트] 서리재 방앗간 참기름 -> 서리재 방앗간 참기름)
+  let cleaned = productName.replace(/^\[.*?\]\s*/g, '');
+
+  // 괄호 제거
+  cleaned = cleaned.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
+
+/**
+ * 재료명과 상품명의 매칭 점수를 계산하는 함수
+ * 점수가 높을수록 더 정확한 매칭
+ */
+function calculateMatchScore(ingredientName: string, productName: string): number {
+  const ingredient = ingredientName.toLowerCase().trim();
+  const product = productName.toLowerCase().trim();
+
+  let score = 0;
+
+  // 1. 정확한 단어 매칭 (가장 높은 점수)
+  if (product === ingredient) {
+    score += 100;
+  }
+
+  // 2. 재료명이 상품명의 시작 부분에 정확히 포함 (높은 점수)
+  if (product.startsWith(ingredient + ' ') || product.startsWith(ingredient)) {
+    score += 80;
+  }
+
+  // 3. 재료명이 상품명에 단어 경계로 포함 (중간 점수)
+  const ingredientWords = ingredient.split(' ');
+  const productWords = product.split(' ');
+
+  for (const ingWord of ingredientWords) {
+    if (productWords.includes(ingWord)) {
+      score += 30;
+    }
+  }
+
+  // 4. 재료명이 상품명에 부분 문자열로 포함 (낮은 점수)
+  if (product.includes(ingredient)) {
+    score += 20;
+  }
+
+  // 5. 정확하지 않은 매칭 패널티
+  // 예: "소금"을 검색했는데 "소금빵", "소금과자" 등이 나오면 감점
+  if (ingredient.length >= 2) {
+    const unwantedSuffixes = ['빵', '과자', '쿠키', '케이크', '사탕', '젤리', '음료', '주스'];
+    for (const suffix of unwantedSuffixes) {
+      if (product.includes(ingredient + suffix)) {
+        score -= 50;
+      }
+    }
+  }
+
+  return score;
+}
+
 export async function searchKurly(ingredientName: string): Promise<ProductInfo[]> {
-  const sanitizedQuery = ingredientName.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const sanitizedQuery = extractCoreIngredient(ingredientName);
   const browser = await chromium.launch({ headless: true });
 
   // 컬리는 쿠키나 특정 헤더가 필요할 수 있음
@@ -426,15 +528,22 @@ export async function searchKurly(ingredientName: string): Promise<ProductInfo[]
         const imageUrl = (await imgElement.getAttribute('src').catch(() => undefined)) || undefined;
 
         if (name && price > 500) { // 너무 저렴한건 배송비나 다른 정보일 수 있음
+          // 매칭 점수 계산
+          const matchScore = calculateMatchScore(sanitizedQuery, name);
+
           products.push({
             name: name,
             price,
             url: link && link.startsWith('http') ? link : `https://www.kurly.com${link}`,
             platform: 'kurly',
             imageUrl,
-          });
+            matchScore, // 매칭 점수 추가
+          } as any);
         }
       }
+
+      // 매칭 점수가 높은 순으로 정렬
+      products.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
     } catch (e) {
       console.error('[Kurly] Extraction error:', e);
     }
@@ -466,6 +575,177 @@ export function extractVideoId(url: string): string | null {
     if (match) return match[1];
   }
   return null;
+}
+
+/**
+ * 컬리에 로그인하고 재료들을 장바구니에 담는 함수
+ * 브라우저를 닫지 않고 열어둡니다.
+ * @param ingredients 장바구니에 담을 재료 이름 배열
+ */
+export async function addToKurlyCartWithLogin(ingredients: string[]): Promise<{
+  success: boolean;
+  message: string;
+  addedItems: string[];
+}> {
+  console.log('[Kurly Cart] Starting browser...');
+  const browser = await chromium.launch({
+    headless: false,  // 브라우저를 보이게 함
+    slowMo: 100  // 동작을 조금 느리게 하여 관찰 가능하게 함
+  });
+
+  const context = await browser.newContext({
+    extraHTTPHeaders: {
+      ...COMMON_HEADERS,
+      'Referer': 'https://www.kurly.com/',
+    }
+  });
+
+  const page = await context.newPage();
+  const addedItems: string[] = [];
+
+  try {
+    // 1. 컬리 로그인 페이지로 이동
+    console.log('[Kurly Cart] Navigating to login page...');
+    await page.goto('https://www.kurly.com/member/login', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    console.log('[Kurly Cart] Please login manually. Waiting for login completion...');
+
+    // 2. 로그인 완료 대기 (메인 페이지로 리다이렉트되거나 특정 요소가 나타날 때까지)
+    // 컬리는 로그인 후 보통 메인 페이지나 이전 페이지로 이동합니다.
+    // URL이 변경되거나, 로그인 후에만 보이는 요소(예: 마이페이지 버튼)가 나타나는지 확인
+    try {
+      await page.waitForFunction(
+        () => {
+          // 로그인 페이지가 아닌 경우 (로그인 성공)
+          const isNotLoginPage = !window.location.href.includes('/member/login');
+          // 또는 로그인 후 나타나는 요소 확인
+          const hasUserMenu = document.querySelector('[class*="user"], [data-testid="user-menu"], .my-page') !== null;
+          return isNotLoginPage || hasUserMenu;
+        },
+        { timeout: 300000 } // 5분 대기 (사용자가 로그인할 시간)
+      );
+      console.log('[Kurly Cart] Login detected! Proceeding...');
+    } catch (e) {
+      console.error('[Kurly Cart] Login timeout or failed');
+      return {
+        success: false,
+        message: '로그인 시간 초과 또는 실패',
+        addedItems: []
+      };
+    }
+
+    // 3. 각 재료를 검색하고 장바구니에 담기
+    for (const ingredient of ingredients) {
+      try {
+        console.log(`[Kurly Cart] Searching for: ${ingredient}`);
+        const sanitizedQuery = extractCoreIngredient(ingredient);
+
+        // 검색 페이지로 이동
+        await page.goto(`https://www.kurly.com/search?sword=${encodeURIComponent(sanitizedQuery)}`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 15000
+        });
+
+        // 상품 목록 대기
+        await page.waitForSelector('[data-testid="product-item"], [class*="ProductItem"], a:has(img)', { timeout: 10000 });
+
+        // 모든 상품 정보를 가져와서 매칭 점수 계산
+        const productElements = page.locator('[data-testid="product-item"], [class*="ProductItem"], a:has(img)');
+        const count = await productElements.count();
+
+        let bestProduct = null;
+        let bestScore = -1;
+        let bestIndex = -1;
+
+        console.log(`[Kurly Cart] Found ${count} products, calculating best match...`);
+
+        for (let i = 0; i < Math.min(count, 10); i++) {
+          const element = productElements.nth(i);
+          const productText = await element.innerText().catch(() => '');
+          const productName = productText.split('\n')[0] || '';
+
+          if (productName) {
+            const score = calculateMatchScore(sanitizedQuery, productName);
+            console.log(`[Kurly Cart] Product ${i}: "${productName}" - Score: ${score}`);
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestProduct = productName;
+              bestIndex = i;
+            }
+          }
+        }
+
+        if (bestIndex >= 0 && bestScore > 0) {
+          console.log(`[Kurly Cart] Best match: "${bestProduct}" (index: ${bestIndex}, score: ${bestScore})`);
+
+          // 가장 잘 매칭되는 상품 클릭
+          const bestProductElement = productElements.nth(bestIndex);
+          await bestProductElement.click();
+        } else {
+          console.log(`[Kurly Cart] No good match found, using first product`);
+          await productElements.first().click();
+        }
+
+        // 상품 상세 페이지 로딩 대기
+        await page.waitForTimeout(2000);
+
+        // 장바구니 담기 버튼 찾기 및 클릭
+        const addToCartButton = page.locator('button:has-text("장바구니"), button:has-text("담기"), [class*="cart"], [data-testid="cart-button"]').first();
+
+        if (await addToCartButton.isVisible({ timeout: 5000 })) {
+          await addToCartButton.click();
+          console.log(`[Kurly Cart] Added to cart: ${ingredient}`);
+          addedItems.push(ingredient);
+
+          // 장바구니 담기 완료 대기
+          await page.waitForTimeout(1500);
+
+          // 팝업이 나타나면 닫기 (선택사항 계속 쇼핑 등)
+          const continueButton = page.locator('button:has-text("계속 쇼핑"), button:has-text("닫기"), button:has-text("확인")').first();
+          if (await continueButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await continueButton.click();
+            await page.waitForTimeout(500);
+          }
+        } else {
+          console.log(`[Kurly Cart] Cart button not found for: ${ingredient}`);
+        }
+      } catch (e) {
+        console.error(`[Kurly Cart] Error adding ${ingredient}:`, e);
+      }
+    }
+
+    // 4. 장바구니 페이지로 이동하여 확인
+    console.log('[Kurly Cart] Navigating to cart page...');
+    await page.goto('https://www.kurly.com/cart', {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
+    });
+
+    console.log('[Kurly Cart] Browser will remain open. Please check your cart!');
+    console.log('[Kurly Cart] Added items:', addedItems);
+
+    // 브라우저를 닫지 않음!
+    // await browser.close(); // 이 줄을 제거하여 브라우저가 열려있도록 함
+
+    return {
+      success: true,
+      message: `${addedItems.length}개의 재료를 장바구니에 담았습니다. 브라우저는 계속 열려있습니다.`,
+      addedItems
+    };
+
+  } catch (error) {
+    console.error('[Kurly Cart] Error:', error);
+    // 에러 발생 시에도 브라우저를 닫지 않음
+    return {
+      success: false,
+      message: `에러 발생: ${error}`,
+      addedItems
+    };
+  }
 }
 
 export async function getYoutubeVideoInfo(url: string): Promise<YoutubeVideoInfo | null> {

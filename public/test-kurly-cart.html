@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>컬리 장바구니 테스트</title>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #5f0080;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        button {
+            background-color: #5f0080;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #7b1fa2;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .result.success {
+            background-color: #e8f5e9;
+            border: 2px solid #4caf50;
+            color: #2e7d32;
+        }
+
+        .result.error {
+            background-color: #ffebee;
+            border: 2px solid #f44336;
+            color: #c62828;
+        }
+
+        .result h3 {
+            margin-top: 0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #5f0080;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .info {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info strong {
+            color: #e65100;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🛒 컬리 장바구니 담기 테스트</h1>
+
+        <div class="info">
+            <strong>⚠️ 주의사항:</strong><br>
+            1. 이 기능은 컬리 로그인 화면을 띄웁니다.<br>
+            2. 수동으로 로그인하면 자동으로 장바구니에 담기를 진행합니다.<br>
+            3. 브라우저는 닫히지 않고 열려있습니다.<br>
+            4. 개발 서버가 실행 중이어야 합니다 (npm run dev).
+        </div>
+
+        <div class="input-group">
+            <label for="ingredients">재료 목록 (한 줄에 하나씩):</label>
+            <textarea id="ingredients" placeholder="예시:&#10;대파&#10;양파&#10;돼지고기&#10;간장&#10;설탕">대파
+양파
+돼지고기</textarea>
+        </div>
+
+        <button id="addToCartBtn" onclick="addToCart()">장바구니에 담기</button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>처리 중... 로그인 후 자동으로 진행됩니다.</p>
+        </div>
+
+        <div class="result" id="result">
+            <h3 id="resultTitle"></h3>
+            <p id="resultMessage"></p>
+            <div id="resultItems"></div>
+        </div>
+    </div>
+
+    <script>
+        async function addToCart() {
+            const textarea = document.getElementById('ingredients');
+            const button = document.getElementById('addToCartBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+
+            // 재료 목록 가져오기
+            const ingredientsText = textarea.value.trim();
+            if (!ingredientsText) {
+                alert('재료를 입력해주세요!');
+                return;
+            }
+
+            const ingredients = ingredientsText.split('\n')
+                .map(i => i.trim())
+                .filter(i => i.length > 0);
+
+            if (ingredients.length === 0) {
+                alert('최소 하나 이상의 재료를 입력해주세요!');
+                return;
+            }
+
+            // UI 업데이트
+            button.disabled = true;
+            loading.style.display = 'block';
+            result.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/cart/kurly', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ingredients })
+                });
+
+                const data = await response.json();
+
+                // 결과 표시
+                result.style.display = 'block';
+                if (data.success) {
+                    result.className = 'result success';
+                    document.getElementById('resultTitle').textContent = '✅ 성공!';
+                    document.getElementById('resultMessage').textContent = data.message;
+
+                    if (data.addedItems && data.addedItems.length > 0) {
+                        document.getElementById('resultItems').innerHTML =
+                            '<strong>장바구니에 담긴 재료:</strong><ul>' +
+                            data.addedItems.map(item => `<li>${item}</li>`).join('') +
+                            '</ul>';
+                    }
+                } else {
+                    result.className = 'result error';
+                    document.getElementById('resultTitle').textContent = '❌ 실패';
+                    document.getElementById('resultMessage').textContent = data.message || '알 수 없는 오류가 발생했습니다.';
+                    document.getElementById('resultItems').innerHTML = '';
+                }
+            } catch (error) {
+                result.style.display = 'block';
+                result.className = 'result error';
+                document.getElementById('resultTitle').textContent = '❌ 오류';
+                document.getElementById('resultMessage').textContent = '서버 연결 실패: ' + error.message;
+                document.getElementById('resultItems').innerHTML = '';
+            } finally {
+                button.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>

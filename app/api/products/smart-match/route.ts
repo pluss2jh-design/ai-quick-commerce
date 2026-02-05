@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
             products,
             amount,
             unit,
-            filter
+            filter,
+            ingredient  // 재료명 전달하여 매칭 점수 계산
         );
 
         if (matchedProduct) {
