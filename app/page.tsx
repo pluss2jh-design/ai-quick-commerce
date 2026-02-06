@@ -761,6 +761,30 @@ export default function Home() {
                       <button
                         key={platform}
                         onClick={async () => {
+                          // 마켓컬리는 서버 사이드 API로 장바구니 담기
+                          if (platform === 'kurly') {
+                            try {
+                              console.log('Kurly cart API 호출 중...');
+                              const response = await fetch('/api/cart/kurly', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ products: items })
+                              });
+
+                              const result = await response.json();
+                              if (result.success) {
+                                alert(`마켓컬리 장바구니 담기 성공!\n${result.message}`);
+                              } else {
+                                alert(`마켓컬리 장바구니 담기 실패: ${result.message}`);
+                              }
+                            } catch (error) {
+                              console.error('Kurly cart error:', error);
+                              alert('마켓컬리 장바구니 담기 중 오류 발생');
+                            }
+                            return;
+                          }
+
+                          // 쿠팡, 배민은 기존 방식 (URL 열기)
                           const EXT_ID = extensionId;
                           try {
                             // @ts-ignore
