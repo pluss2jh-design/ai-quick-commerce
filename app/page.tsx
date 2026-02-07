@@ -763,8 +763,26 @@ export default function Home() {
                         onClick={async () => {
                           // 마켓컬리는 서버 사이드 API로 장바구니 담기
                           if (platform === 'kurly') {
+                            // 사용자에게 안내 메시지 표시
+                            const confirmMessage = `🛒 마켓컬리 자동 장바구니 담기\n\n` +
+                              `✅ ${items.length}개 상품을 자동으로 장바구니에 담습니다.\n\n` +
+                              `📌 중요 안내:\n` +
+                              `1. 새 브라우저 창이 열립니다 (작업 표시줄 확인)\n` +
+                              `2. 마켓컬리에 로그인해주세요\n` +
+                              `3. 로그인 후 자동으로 상품이 담깁니다\n` +
+                              `4. 약 1-2분 소요됩니다\n\n` +
+                              `계속하시겠습니까?`;
+
+                            if (!confirm(confirmMessage)) {
+                              return;
+                            }
+
                             try {
                               console.log('Kurly cart API 호출 중...');
+
+                              // 로딩 메시지 표시
+                              alert('🔄 브라우저 창을 여는 중입니다...\n작업 표시줄을 확인해주세요!');
+
                               const response = await fetch('/api/cart/kurly', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -773,13 +791,27 @@ export default function Home() {
 
                               const result = await response.json();
                               if (result.success) {
-                                alert(`마켓컬리 장바구니 담기 성공!\n${result.message}`);
+                                alert(
+                                  `✅ 마켓컬리 장바구니 담기 완료!\n\n` +
+                                  `담긴 상품: ${result.addedItems.length}개\n` +
+                                  `${result.addedItems.map((item: string) => `• ${item}`).join('\n')}\n\n` +
+                                  `🛒 열린 브라우저에서 장바구니를 확인하세요!`
+                                );
                               } else {
-                                alert(`마켓컬리 장바구니 담기 실패: ${result.message}`);
+                                alert(
+                                  `❌ 장바구니 담기 실패\n\n` +
+                                  `사유: ${result.message}\n\n` +
+                                  `💡 다시 시도해주세요.\n` +
+                                  `로그인 시간이 부족하면 5분 내에 로그인해주세요.`
+                                );
                               }
                             } catch (error) {
                               console.error('Kurly cart error:', error);
-                              alert('마켓컬리 장바구니 담기 중 오류 발생');
+                              alert(
+                                `❌ 오류 발생\n\n` +
+                                `마켓컬리 장바구니 담기 중 오류가 발생했습니다.\n` +
+                                `다시 시도해주세요.`
+                              );
                             }
                             return;
                           }
