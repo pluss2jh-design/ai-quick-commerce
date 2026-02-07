@@ -493,6 +493,26 @@ function calculateMatchScore(ingredientName: string, productName: string): numbe
     }
   }
 
+  // 7. 카테고리 불일치 감점 (식재료 검색 시 화장품/생활용품 제외)
+  const nonFoodKeywords = [
+    // 화장품
+    '클렌징', '로션', '크림', '에센스', '세럼', '토너', '스킨', '미스트', '팩', '마스크',
+    '립스틱', '파운데이션', '쿠션', '비비', '컨실러', '아이섀도', '마스카라',
+    '선크림', '자외선차단', 'SPF', 'UV',
+    // 생활용품
+    '세제', '샴푸', '린스', '바디워시', '비누', '치약', '칫솔',
+    '수건', '타월', '휴지', '키친타월',
+    // 화장품 브랜드
+    '에뛰드', '이니스프리', '토니모리', '미샤', '더페이스샵', '라네즈', '설화수',
+    'etude', 'innisfree', 'tonymoly', 'missha', 'thefaceshop', 'laneige'
+  ];
+
+  for (const keyword of nonFoodKeywords) {
+    if (originalProductLower.includes(keyword)) {
+      score -= 100; // 큰 감점으로 완전히 제외
+    }
+  }
+
   return score;
 }
 
@@ -676,51 +696,41 @@ export async function addToKurlyCartWithLogin(products: ProductInfo[]): Promise<
         // 상품 상세 페이지 로딩 대기
         await page.waitForTimeout(2000);
 
-        // 옵션 선택이 필요한지 확인 및 선택
-        // 여러 가지 방법으로 시도
+        // 옵션 선택 필요 여부 확인 (장바구니 버튼이 비활성화되어 있으면 옵션 필요)
+        await page.waitForTimeout(1000);
         let optionSelected = false;
 
-        // 방법 1: 클릭 가능한 옵션 버튼/div 찾기 (마켓컬리 주요 방식)
-        const optionItems = page.locator('div[role="button"]:has-text("국산 진한 팥물"), div[role="button"]:has-text("택1"), button:has-text("택1"), div[class*="Option"]:has-text("국산 진한 팥물"), li[role="option"], div[role="option"]');
-        const optionCount = await optionItems.count();
+        console.log(`[Kurly Cart] Checking if options are required...`);
 
-        if (optionCount > 0) {
-          console.log(`[Kurly Cart] Found ${optionCount} clickable options, selecting first...`);
+        // 방법 1: 셀렉트박스 (드롭다운) - 가장 일반적
+        const selectBoxes = page.locator('select');
+        const selectCount = await selectBoxes.count();
+        if (selectCount > 0) {
+          console.log(`[Kurly Cart] Found ${selectCount} select boxes, selecting from first...`);
           try {
-            await optionItems.first().click();
-            await page.waitForTimeout(1000);
-            console.log(`[Kurly Cart] ✅ Selected clickable option`);
-            optionSelected = true;
-          } catch (e) {
-            console.log(`[Kurly Cart] ⚠️ Failed to click option: ${e}`);
-          }
-        }
-
-        // 방법 2: 셀렉트박스 (드롭다운)
-        if (!optionSelected) {
-          const selectBox = page.locator('select').first();
-          if (await selectBox.isVisible({ timeout: 2000 }).catch(() => false)) {
-            try {
-              const options = await selectBox.locator('option').count();
-              if (options > 1) {
-                await selectBox.selectOption({ index: 1 });
-                await page.waitForTimeout(1000);
-                console.log(`[Kurly Cart] ✅ Selected from dropdown`);
-                optionSelected = true;
-              }
-            } catch (e) {
-              console.log(`[Kurly Cart] ⚠️ Failed to select dropdown: ${e}`);
+            const firstSelect = selectBoxes.first();
+            const options = await firstSelect.locator('option').count();
+            if (options > 1) {
+              // 첫 번째 옵션은 보통 "선택하세요"이므로 두 번째 선택
+              await firstSelect.selectOption({ index: 1 });
+              await page.waitForTimeout(1500);
+              console.log(`[Kurly Cart] ✅ Selected from dropdown (index 1)`);
+              optionSelected = true;
             }
+          } catch (e) {
+            console.log(`[Kurly Cart] ⚠️ Failed to select dropdown: ${e}`);
           }
         }
 
-        // 방법 3: 라디오 버튼
+        // 방법 2: 라디오 버튼
         if (!optionSelected) {
-          const radioButton = page.locator('input[type="radio"]').first();
-          if (await radioButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const radioButtons = page.locator('input[type="radio"]');
+          const radioCount = await radioButtons.count();
+          if (radioCount > 0) {
+            console.log(`[Kurly Cart] Found ${radioCount} radio buttons, selecting first...`);
             try {
-              await radioButton.click();
-              await page.waitForTimeout(1000);
+              await radioButtons.first().click();
+              await page.waitForTimeout(1500);
               console.log(`[Kurly Cart] ✅ Selected radio button`);
               optionSelected = true;
             } catch (e) {
@@ -729,24 +739,52 @@ export async function addToKurlyCartWithLogin(products: ProductInfo[]): Promise<
           }
         }
 
-        // 방법 4: 일반 버튼형 옵션
+        // 방법 3: div[role="button"] 옵션 (마켓컬리 주요 방식)
         if (!optionSelected) {
-          const anyOptionButton = page.locator('button[class*="option"], button[class*="Option"]').first();
-          if (await anyOptionButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const roleButtons = page.locator('div[role="button"], li[role="option"]');
+          const roleCount = await roleButtons.count();
+          if (roleCount > 0) {
+            console.log(`[Kurly Cart] Found ${roleCount} role buttons, selecting first visible...`);
+            // 보이는 것 중 첫 번째 클릭
+            for (let i = 0; i < Math.min(roleCount, 5); i++) {
+              try {
+                const btn = roleButtons.nth(i);
+                if (await btn.isVisible({ timeout: 500 }).catch(() => false)) {
+                  await btn.click();
+                  await page.waitForTimeout(1500);
+                  console.log(`[Kurly Cart] ✅ Clicked role button (index ${i})`);
+                  optionSelected = true;
+                  break;
+                }
+              } catch (e) {
+                continue;
+              }
+            }
+          }
+        }
+
+        // 방법 4: 일반 버튼형 옵션 (class에 option 포함)
+        if (!optionSelected) {
+          const optionButtons = page.locator('button[class*="option"], button[class*="Option"]');
+          const btnCount = await optionButtons.count();
+          if (btnCount > 0) {
+            console.log(`[Kurly Cart] Found ${btnCount} option buttons, selecting first...`);
             try {
-              await anyOptionButton.click();
-              await page.waitForTimeout(1000);
-              console.log(`[Kurly Cart] ✅ Selected button option`);
+              await optionButtons.first().click();
+              await page.waitForTimeout(1500);
+              console.log(`[Kurly Cart] ✅ Selected option button`);
               optionSelected = true;
             } catch (e) {
-              console.log(`[Kurly Cart] ⚠️ Failed to click button: ${e}`);
+              console.log(`[Kurly Cart] ⚠️ Failed to click option button: ${e}`);
             }
           }
         }
 
         if (optionSelected) {
-          // 옵션 선택 후 추가 대기 (UI 업데이트 시간)
-          await page.waitForTimeout(1000);
+          console.log(`[Kurly Cart] Option selected, waiting for UI update...`);
+          await page.waitForTimeout(1500);
+        } else {
+          console.log(`[Kurly Cart] No options found or needed`);
         }
 
         // 장바구니 담기 버튼 찾기 및 클릭
