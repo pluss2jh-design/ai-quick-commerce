@@ -22,64 +22,28 @@ export default function Home() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
 
-  const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
-  const [extensionId, setExtensionId] = useState(''); // 초기값 비움
-  const [showExtensionGuide, setShowExtensionGuide] = useState(false);
+
+  const [availableModels, setAvailableModels] = useState<{ id: string, name: string, provider: string }[]>([]);
+  const [selectedModel, setSelectedModel] = useState<{ id: string, provider: string }>({
+    id: 'claude-3-haiku-20240307',
+    provider: 'anthropic'
+  });
 
   useEffect(() => {
-    const savedId = localStorage.getItem('cart_ai_ext_id');
-    if (savedId && savedId.trim() !== '') {
-      setExtensionId(savedId);
-      // 저장된 ID가 있으면 즉시 연결 확인 시도
-      // @ts-ignore
-      if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-        try {
-          // @ts-ignore
-          window.chrome.runtime.sendMessage(savedId, { action: 'PING' }, (response) => {
-            if (response && response.status === 'pong') {
-              setIsExtensionInstalled(true);
-            } else {
-              setIsExtensionInstalled(false);
-            }
-          });
-        } catch (e) {
-          setIsExtensionInstalled(false);
+    const fetchModels = async () => {
+      try {
+        const response = await fetch('/api/ai/models');
+        const result = await response.json();
+        if (result.success) {
+          setAvailableModels(result.data);
         }
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
       }
-    }
+    };
+    fetchModels();
   }, []);
 
-  const updateExtensionId = (id: string) => {
-    setExtensionId(id);
-    localStorage.setItem('cart_ai_ext_id', id);
-
-    if (!id.trim()) {
-      setIsExtensionInstalled(false);
-      return;
-    }
-
-    // ID 입력 시 즉시 연결 확인 시도
-    // @ts-ignore
-    if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-      try {
-        // @ts-ignore
-        window.chrome.runtime.sendMessage(id, { action: 'PING' }, (response) => {
-          // @ts-ignore
-          if (window.chrome.runtime.lastError) {
-            setIsExtensionInstalled(false);
-            return;
-          }
-          if (response && response.status === 'pong') {
-            setIsExtensionInstalled(true);
-          } else {
-            setIsExtensionInstalled(false);
-          }
-        });
-      } catch (e) {
-        setIsExtensionInstalled(false);
-      }
-    }
-  };
 
   const handleAnalyze = async () => {
     if (!input.trim()) return;
@@ -99,6 +63,8 @@ export default function Home() {
         body: JSON.stringify({
           inputType: isYoutube ? 'youtube' : 'food',
           value: input,
+          modelId: selectedModel.id,
+          provider: selectedModel.provider
         }),
       });
 
@@ -310,6 +276,28 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-8">
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-[#2D2D2D] ml-1">사용할 AI 모델</label>
+                    <select
+                      value={`${selectedModel.id}|${selectedModel.provider}`}
+                      onChange={(e) => {
+                        const [id, provider] = e.target.value.split('|');
+                        setSelectedModel({ id, provider });
+                      }}
+                      className="w-full bg-[#FAFAFA] border-2 border-[#F3EFEA] focus:border-[#FF9A8B] rounded-2xl px-6 py-4 text-sm font-medium outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      {availableModels.length > 0 ? (
+                        availableModels.map((model) => (
+                          <option key={model.id} value={`${model.id}|${model.provider}`}>
+                            [{model.provider.toUpperCase()}] {model.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="claude-3-haiku-20240307|anthropic">Claude 3 Haiku (Loading...)</option>
+                      )}
+                    </select>
+                  </div>
+
                   <div className="space-y-3">
                     <label className="text-sm font-bold text-[#2D2D2D] ml-1">레시피 또는 링크</label>
                     <div className="relative group">
@@ -673,74 +661,11 @@ export default function Home() {
 
           <div className="p-8 bg-[#FAFAFA] border-t border-[#F3EFEA] space-y-6">
             <div className="bg-white border border-[#F3EFEA] p-5 rounded-3xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isExtensionInstalled ? 'bg-green-500 animate-pulse' : 'bg-[#AEAEAE]'}`}></div>
-                  <span className="text-[13px] font-black text-[#2D2D2D]">
-                    {isExtensionInstalled ? '확장 프로그램이 연결되었습니다' : '확장 프로그램 미설치'}
-                  </span>
-                </div>
-                {!isExtensionInstalled && (
-                  <button
-                    onClick={() => setShowExtensionGuide(!showExtensionGuide)}
-                    className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
-                  >
-                    설치 방법 보기
-                  </button>
-                )}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[13px] font-black text-[#2D2D2D]">✨ 상품 웹 구매 안내</span>
               </div>
-
-              {!isExtensionInstalled && (
-                <div className="bg-[#FAFAFA] border border-[#F3EFEA] p-4 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-black text-[#2D2D2D]">확장 프로그램 ID 설정</p>
-                    <button
-                      onClick={() => setShowExtensionGuide(!showExtensionGuide)}
-                      className="text-[11px] font-bold text-[#FF9A8B] hover:underline"
-                    >
-                      설치 방법 보기
-                    </button>
-                  </div>
-
-                  {showExtensionGuide && (
-                    <p className="text-[11px] font-bold text-[#8E8E8E] leading-relaxed pb-2 border-b border-dashed border-[#F3EFEA]">
-                      1. <code className="bg-white px-1.5 py-0.5 rounded border">apps/extension</code> 폴더 로드<br />
-                      2. 생성된 <span className="text-[#FF9A8B]">ID</span> 입력 후 [연결 확인] 클릭
-                    </p>
-                  )}
-
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={extensionId}
-                        onChange={(e) => updateExtensionId(e.target.value)}
-                        placeholder="확장 프로그램 ID 입력"
-                        className="w-full text-[11px] bg-white border border-[#F3EFEA] rounded-lg px-3 py-2 outline-none focus:border-[#FF9A8B] font-mono pr-8"
-                      />
-                      {extensionId && (
-                        <button
-                          onClick={() => updateExtensionId('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#AEAEAE] hover:text-[#FF5252]"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-3 py-2 bg-[#2D2D2D] text-white text-[11px] font-black rounded-lg hover:bg-black transition-all"
-                    >
-                      연결 확인
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <p className="text-[11px] font-medium text-[#AEAEAE] leading-relaxed">
-                자동 담기 기능을 이용하려면 마켓에 로그인되어 있어야 합니다. 연결되지 않은 경우 페이지가 개별적으로 열립니다.
+                웹 버전에서는 팝업 형태로 구매 페이지를 직접 열어줍니다. 팝업 차단이 해제되어 있어야 올바르게 작동하며, 표시된 각 탭에서 수량을 확인 후 장바구니에 담아주시면 됩니다.
               </p>
             </div>
 
@@ -760,31 +685,8 @@ export default function Home() {
                     return (
                       <button
                         key={platform}
-                        onClick={async () => {
-                          const EXT_ID = extensionId;
-                          try {
-                            // @ts-ignore
-                            if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-                              // @ts-ignore
-                              window.chrome.runtime.sendMessage(EXT_ID, {
-                                action: "START_MARKET_SYNC",
-                                products: items
-                              }, (response: any) => {
-                                // @ts-ignore
-                                if (window.chrome.runtime.lastError) {
-                                  // 확장 프로그램이 없으면 기존 방식(탭 열기)으로 폴백
-                                  items.forEach(item => window.open(item.url, '_blank'));
-                                } else {
-                                  alert(`${platform} 장바구니 동기화를 시작합니다! (확장 프로그램 작동)`);
-                                }
-                              });
-                            } else {
-                              // 일반 브라우저면 기존 방식
-                              items.forEach(item => window.open(item.url, '_blank'));
-                            }
-                          } catch (e) {
-                            items.forEach(item => window.open(item.url, '_blank'));
-                          }
+                        onClick={() => {
+                          items.forEach(item => window.open(item.url, '_blank'));
                         }}
                         className={`w-full py-4 text-white text-[15px] font-black rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${platform === 'coupang' ? 'bg-[#0074E9]' :
                           platform === 'kurly' ? 'bg-[#5f0080]' : 'bg-[#2ac1bc]'
