@@ -59,6 +59,37 @@ async function processItems(products, senderTabId) {
 
                         if (response && response.success) {
                             success = true;
+                        } else if (response && response.needLogin) {
+                            console.log("[CART.ai] Login required. Opening login page...");
+                            await chrome.tabs.update(processingTabId, { active: true });
+
+                            let loginUrl = '';
+                            if (product.platform === 'kurly') loginUrl = 'https://www.kurly.com/member/login';
+                            else if (product.platform === 'coupang') loginUrl = 'https://login.coupang.com/login/login.pang';
+                            else if (product.platform === 'baemin') loginUrl = 'https://mart.baemin.com';
+
+                            if (loginUrl) {
+                                await chrome.tabs.update(processingTabId, { url: loginUrl });
+                            }
+
+                            notifyWebApp(senderTabId, {
+                                action: "SYNC_PROGRESS",
+                                index: i,
+                                productName: product.name,
+                                status: "processing",
+                                error: "로그인이 필요합니다. 팝업창에서 로그인해주세요."
+                            });
+
+                            const loggedIn = await waitForLogin(processingTabId);
+                            if (loggedIn) {
+                                console.log("[CART.ai] User logged in. Retrying...");
+                                // 탭 다시 백그라운드로 전환하고 현재 제품부터 재작업
+                                await chrome.tabs.update(processingTabId, { active: false });
+                                i--; // 루프를 현재 요소부터 재시작
+                                break; // while loop 탈출해서 for loop 다음 이터레이션(동일 인덱스) 진행
+                            } else {
+                                throw new Error("로그인 시간이 초과되거나 탭이 닫혔습니다.");
+                            }
                         } else {
                             throw new Error(response?.error || "담기 실패");
                         }
@@ -158,5 +189,33 @@ function sendMessageToTab(tabId, message) {
                 resolve(response);
             }
         });
+    });
+}
+
+// 사용자가 로그인할 때까지 폴링하며 대기하는 함수
+async function waitForLogin(tabId) {
+    return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 600; // 최대 5분 대기 (0.5초 * 600)
+
+        const check = async () => {
+            if (attempts > maxAttempts) return resolve(false);
+            try {
+                const tab = await chrome.tabs.get(tabId);
+                if (!tab) return resolve(false); // 탭이 닫히면 중단
+
+                // 페이지가 완전히 로드된 경우에만 CHECK_LOGIN 스크립트 실행
+                if (tab.status === 'complete') {
+                    const response = await sendMessageToTab(tabId, { action: "CHECK_LOGIN" }).catch(() => null);
+                    if (response && response.isLoggedIn) {
+                        return resolve(true);
+                    }
+                }
+            } catch (e) { }
+
+            attempts++;
+            setTimeout(check, 500);
+        };
+        check();
     });
 }
